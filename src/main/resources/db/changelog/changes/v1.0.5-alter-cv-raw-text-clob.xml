@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v1.0.5 — Widen CV_RAW_TEXT from VARCHAR2(4000) to CLOB
+        Oracle does not allow direct MODIFY of VARCHAR2→CLOB, so we use
+        the add-copy-drop-rename pattern.
+    -->
+
+    <changeSet id="v1.0.5-cv-raw-text-to-clob" author="hr-dev" dbms="oracle">
+
+        <sql>ALTER TABLE CANDIDATE ADD CV_RAW_TEXT_TMP CLOB</sql>
+        <sql>UPDATE CANDIDATE SET CV_RAW_TEXT_TMP = CV_RAW_TEXT</sql>
+        <sql>ALTER TABLE CANDIDATE DROP COLUMN CV_RAW_TEXT</sql>
+        <sql>ALTER TABLE CANDIDATE RENAME COLUMN CV_RAW_TEXT_TMP TO CV_RAW_TEXT</sql>
+
+        <rollback>
+            <sql>ALTER TABLE CANDIDATE ADD CV_RAW_TEXT_V2 VARCHAR2(4000)</sql>
+            <sql>UPDATE CANDIDATE SET CV_RAW_TEXT_V2 = SUBSTR(CV_RAW_TEXT, 1, 4000)</sql>
+            <sql>ALTER TABLE CANDIDATE DROP COLUMN CV_RAW_TEXT</sql>
+            <sql>ALTER TABLE CANDIDATE RENAME COLUMN CV_RAW_TEXT_V2 TO CV_RAW_TEXT</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

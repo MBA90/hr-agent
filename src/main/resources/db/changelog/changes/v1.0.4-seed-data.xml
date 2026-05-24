@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v1.0.4 — Seed Data
+        Author : hr-dev
+        Date   : 2025-01-01
+        Note   : Only runs once. Use context="dev" to skip in prod if needed.
+    -->
+
+    <changeSet id="v1.0.4-seed-job-postings" author="hr-dev" context="dev,prod">
+        <comment>Insert initial job postings</comment>
+
+        <insert tableName="JOB_POSTING">
+            <column name="ID"               valueSequenceNext="SEQ_JOB_POSTING"/>
+            <column name="TITLE"            value="Senior Java Developer"/>
+            <column name="DEPARTMENT"       value="Engineering"/>
+            <column name="DESCRIPTION"      value="We are looking for a Senior Java Developer to join our growing backend team and build scalable microservices."/>
+            <column name="REQUIRED_SKILLS"  value="Java, Spring Boot, Oracle, Microservices, REST APIs, Docker"/>
+            <column name="EXPERIENCE_YEARS" valueNumeric="5"/>
+            <column name="LOCATION"         value="Dubai, UAE"/>
+            <column name="SALARY_MIN"       valueNumeric="20000"/>
+            <column name="SALARY_MAX"       valueNumeric="30000"/>
+            <column name="STATUS"           value="OPEN"/>
+        </insert>
+
+        <insert tableName="JOB_POSTING">
+            <column name="ID"               valueSequenceNext="SEQ_JOB_POSTING"/>
+            <column name="TITLE"            value="HR Business Partner"/>
+            <column name="DEPARTMENT"       value="Human Resources"/>
+            <column name="DESCRIPTION"      value="Experienced HR partner to lead talent acquisition and people strategy across departments."/>
+            <column name="REQUIRED_SKILLS"  value="Recruitment, HR Policies, HRIS, Oracle HCM, Communication"/>
+            <column name="EXPERIENCE_YEARS" valueNumeric="3"/>
+            <column name="LOCATION"         value="Abu Dhabi, UAE"/>
+            <column name="SALARY_MIN"       valueNumeric="15000"/>
+            <column name="SALARY_MAX"       valueNumeric="22000"/>
+            <column name="STATUS"           value="OPEN"/>
+        </insert>
+
+        <insert tableName="JOB_POSTING">
+            <column name="ID"               valueSequenceNext="SEQ_JOB_POSTING"/>
+            <column name="TITLE"            value="DevOps Engineer"/>
+            <column name="DEPARTMENT"       value="Engineering"/>
+            <column name="DESCRIPTION"      value="Build and maintain CI/CD pipelines, Kubernetes clusters, and cloud infrastructure."/>
+            <column name="REQUIRED_SKILLS"  value="Kubernetes, Docker, Jenkins, AWS, Terraform, Linux"/>
+            <column name="EXPERIENCE_YEARS" valueNumeric="4"/>
+            <column name="LOCATION"         value="Dubai, UAE"/>
+            <column name="SALARY_MIN"       valueNumeric="18000"/>
+            <column name="SALARY_MAX"       valueNumeric="26000"/>
+            <column name="STATUS"           value="OPEN"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="JOB_POSTING"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="v1.0.4-seed-candidates" author="hr-dev" context="dev">
+        <comment>Insert sample candidates for testing (dev only)</comment>
+
+        <insert tableName="CANDIDATE">
+            <column name="ID"               valueSequenceNext="SEQ_CANDIDATE"/>
+            <column name="FULL_NAME"        value="Ahmed Al-Rashid"/>
+            <column name="EMAIL"            value="ahmed.rashid@example.com"/>
+            <column name="PHONE"            value="+971501234567"/>
+            <column name="NATIONALITY"      value="UAE"/>
+            <column name="SKILLS"           value="Java, Spring Boot, Oracle, REST APIs, Docker"/>
+            <column name="EXPERIENCE_YEARS" valueNumeric="6"/>
+            <column name="EDUCATION"        value="BSc Computer Science, UAE University"/>
+            <column name="CURRENT_ROLE"     value="Backend Developer at TechCorp"/>
+            <column name="STATUS"           value="APPLIED"/>
+            <column name="JOB_POSTING_ID"   valueNumeric="1"/>
+        </insert>
+
+        <insert tableName="CANDIDATE">
+            <column name="ID"               valueSequenceNext="SEQ_CANDIDATE"/>
+            <column name="FULL_NAME"        value="Sara Al-Mansoori"/>
+            <column name="EMAIL"            value="sara.mansoori@example.com"/>
+            <column name="PHONE"            value="+971509876543"/>
+            <column name="NATIONALITY"      value="UAE"/>
+            <column name="SKILLS"           value="Recruitment, HR Policies, Oracle HCM, HRIS"/>
+            <column name="EXPERIENCE_YEARS" valueNumeric="4"/>
+            <column name="EDUCATION"        value="BA Human Resources, Zayed University"/>
+            <column name="CURRENT_ROLE"     value="HR Specialist at GlobalCo"/>
+            <column name="STATUS"           value="APPLIED"/>
+            <column name="JOB_POSTING_ID"   valueNumeric="2"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="CANDIDATE"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

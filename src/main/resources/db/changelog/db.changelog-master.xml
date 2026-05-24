@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        MASTER CHANGELOG
+        ════════════════
+        Add new migration files below in version order.
+        Liquibase runs them once and tracks them in DATABASECHANGELOG table.
+    -->
+
+    <include file="db/changelog/changes/v1.0.0-create-sequences.xml"/>
+    <include file="db/changelog/changes/v1.0.1-create-job-posting.xml"/>
+    <include file="db/changelog/changes/v1.0.2-create-candidate.xml"/>
+    <include file="db/changelog/changes/v1.0.3-create-interview.xml"/>
+    <include file="db/changelog/changes/v1.0.4-seed-data.xml"/>
+    <include file="db/changelog/changes/v1.0.5-alter-cv-raw-text-clob.xml"/>
+
+</databaseChangeLog>

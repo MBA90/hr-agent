@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v1.0.3 — Create INTERVIEW table
+        Author : hr-dev
+        Date   : 2025-01-01
+    -->
+
+    <changeSet id="v1.0.3-create-interview" author="hr-dev">
+        <comment>Scheduled interviews between candidates and HR/technical panel</comment>
+
+        <createTable tableName="INTERVIEW">
+
+            <column name="ID" type="NUMBER">
+                <constraints primaryKey="true" primaryKeyName="PK_INTERVIEW" nullable="false"/>
+            </column>
+
+            <column name="CANDIDATE_ID" type="NUMBER">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="JOB_POSTING_ID" type="NUMBER">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="SCHEDULED_AT" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="DURATION_MINUTES" type="NUMBER(5)" defaultValueNumeric="60"/>
+
+            <column name="INTERVIEW_TYPE" type="VARCHAR2(50)"/>
+            <!-- Values: TECHNICAL | HR | FINAL -->
+
+            <column name="MEETING_LINK" type="VARCHAR2(500)"/>
+
+            <column name="INTERVIEWER_NAME" type="VARCHAR2(200)"/>
+
+            <column name="NOTES" type="VARCHAR2(2000)"/>
+
+            <column name="FEEDBACK" type="VARCHAR2(4000)"/>
+
+            <column name="STATUS" type="VARCHAR2(30)" defaultValue="SCHEDULED">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="CREATED_AT" type="TIMESTAMP" defaultValueComputed="SYSTIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+        </createTable>
+
+        <!-- FK: Interview → Candidate -->
+        <addForeignKeyConstraint
+                baseTableName="INTERVIEW"
+                baseColumnNames="CANDIDATE_ID"
+                referencedTableName="CANDIDATE"
+                referencedColumnNames="ID"
+                constraintName="FK_INTERVIEW_CANDIDATE"
+                onDelete="CASCADE"/>
+
+        <!-- FK: Interview → JobPosting -->
+        <addForeignKeyConstraint
+                baseTableName="INTERVIEW"
+                baseColumnNames="JOB_POSTING_ID"
+                referencedTableName="JOB_POSTING"
+                referencedColumnNames="ID"
+                constraintName="FK_INTERVIEW_JOB"
+                onDelete="CASCADE"/>
+
+        <!-- Status constraint -->
+        <sql>
+            ALTER TABLE INTERVIEW ADD CONSTRAINT CHK_INTERVIEW_STATUS
+            CHECK (STATUS IN ('SCHEDULED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW'))
+        </sql>
+
+        <!-- Index for upcoming interview queries -->
+        <createIndex indexName="IDX_INTERVIEW_SCHEDULED_AT" tableName="INTERVIEW">
+            <column name="SCHEDULED_AT"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="INTERVIEW"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

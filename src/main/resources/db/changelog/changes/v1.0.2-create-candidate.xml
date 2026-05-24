@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v1.0.2 — Create CANDIDATE table
+        Author : hr-dev
+        Date   : 2025-01-01
+    -->
+
+    <changeSet id="v1.0.2-create-candidate" author="hr-dev">
+        <comment>Job applicants/candidates table</comment>
+
+        <createTable tableName="CANDIDATE">
+
+            <column name="ID" type="NUMBER">
+                <constraints primaryKey="true" primaryKeyName="PK_CANDIDATE" nullable="false"/>
+            </column>
+
+            <column name="FULL_NAME" type="VARCHAR2(200)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="EMAIL" type="VARCHAR2(200)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="UQ_CANDIDATE_EMAIL"/>
+            </column>
+
+            <column name="PHONE" type="VARCHAR2(20)"/>
+
+            <column name="NATIONALITY" type="VARCHAR2(100)"/>
+
+            <!-- CV Storage -->
+            <column name="CV_FILE_PATH" type="VARCHAR2(500)"/>
+
+            <column name="CV_RAW_TEXT" type="VARCHAR2(4000)">
+                <constraints nullable="true"/>
+            </column>
+
+            <!-- AI-Extracted fields -->
+            <column name="SKILLS" type="VARCHAR2(2000)"/>
+
+            <column name="EXPERIENCE_YEARS" type="NUMBER(3)"/>
+
+            <column name="EDUCATION" type="VARCHAR2(500)"/>
+
+            <column name="CURRENT_ROLE" type="VARCHAR2(200)"/>
+
+            <!-- AI Scoring -->
+            <column name="SCORE" type="NUMBER(5,2)"/>
+
+            <column name="SCORE_REASON" type="VARCHAR2(2000)"/>
+
+            <!-- Pipeline Status -->
+            <column name="STATUS" type="VARCHAR2(30)" defaultValue="APPLIED">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- FK to Job -->
+            <column name="JOB_POSTING_ID" type="NUMBER"/>
+
+            <column name="APPLIED_AT" type="TIMESTAMP" defaultValueComputed="SYSTIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="UPDATED_AT" type="TIMESTAMP" defaultValueComputed="SYSTIMESTAMP"/>
+
+        </createTable>
+
+        <!-- FK: Candidate → JobPosting -->
+        <addForeignKeyConstraint
+                baseTableName="CANDIDATE"
+                baseColumnNames="JOB_POSTING_ID"
+                referencedTableName="JOB_POSTING"
+                referencedColumnNames="ID"
+                constraintName="FK_CANDIDATE_JOB"
+                onDelete="SET NULL"/>
+
+        <!-- Status constraint -->
+        <sql>
+            ALTER TABLE CANDIDATE ADD CONSTRAINT CHK_CANDIDATE_STATUS
+            CHECK (STATUS IN ('APPLIED','CV_REVIEWED','SHORTLISTED',
+                              'INTERVIEW_SCHEDULED','INTERVIEW_DONE',
+                              'OFFER_SENT','HIRED','REJECTED'))
+        </sql>
+
+        <!-- Index for fast lookups by job -->
+        <createIndex indexName="IDX_CANDIDATE_JOB" tableName="CANDIDATE">
+            <column name="JOB_POSTING_ID"/>
+        </createIndex>
+
+        <!-- Index for score-based queries -->
+        <createIndex indexName="IDX_CANDIDATE_SCORE" tableName="CANDIDATE">
+            <column name="SCORE" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="CANDIDATE"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
