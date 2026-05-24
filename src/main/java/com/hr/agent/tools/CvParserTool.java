@@ -54,9 +54,10 @@ public class CvParserTool {
             CandidateProfile profile = extractProfileWithLlm(rawText);
 
             // 3. Persist extracted data
+            int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
             candidate.setCvRawText(rawText);
             candidate.setSkills(profile.getSkills());
-            candidate.setExperienceYears(profile.getExperienceYears());
+            candidate.setExperienceYears(experienceYears);
             candidate.setEducation(profile.getEducation());
             candidate.setCurrentRole(profile.getCurrentRole());
             candidate.setNationality(profile.getNationality());
@@ -67,7 +68,7 @@ public class CvParserTool {
             return String.format(
                 "CV parsed for %s: Skills=[%s], Experience=%d yrs, Education=%s, Role=%s",
                 candidate.getFullName(), profile.getSkills(),
-                profile.getExperienceYears(), profile.getEducation(), profile.getCurrentRole()
+                experienceYears, profile.getEducation(), profile.getCurrentRole()
             );
 
         } catch (Exception e) {
