@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:oracle:thin:@localhost:1521/ORCLPDB1
     username: hr_agent
-    password: admin
+    password: ${DB_PASSWORD:admin}
     driver-class-name: oracle.jdbc.OracleDriver
 
   jpa:
@@ -26,8 +26,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 587
-    username: moh.b.abdelhadi@gmail.com
-    password: hdninuilpdncjuia
+    username: ${MAIL_USERNAME:your.email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
     properties:
       mail:
         smtp:
@@ -49,7 +49,7 @@ ollama:
 hr:
   agent:
     min-score-threshold: 60
-    cv-storage-path: /home/mba/Desktop/uploaded_cv/
+    cv-storage-path: ${CV_STORAGE_PATH:./cv-uploads/}
     memory-max-messages: 20
 
 logging:
