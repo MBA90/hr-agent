@@ -1,0 +1,611 @@
+{
+	"info": {
+		"_postman_id": "6bfc91a6-1455-4552-ae84-5412ebbef5a5",
+		"name": "HR Agent Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "50210078",
+		"_collection_link": "https://moh-b-abdelhadi-2813784.postman.co/workspace/Mohammad-Abdelhadi's-Workspace~bed5e136-3401-4adc-8d2d-a5b787ff6faa/collection/50210078-6bfc91a6-1455-4552-ae84-5412ebbef5a5?action=share&source=collection_link&creator=50210078"
+	},
+	"item": [
+		{
+			"name": "Upload-CV",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "file",
+							"type": "file",
+							"src": "/home/mba/Desktop/Musa Resume.pdf"
+						},
+						{
+							"key": "jobId",
+							"value": "1",
+							"type": "text"
+						},
+						{
+							"key": "email",
+							"value": "musa.izziddine@gmail.com",
+							"type": "text"
+						},
+						{
+							"key": "name",
+							"value": "Musa Izzedine",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "+971564147000",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/upload-cv",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"upload-cv"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/agent/upload-cv \\\n  -F \"file=@/path/to/ahmed-cv.pdf\" \\\n  -F \"jobId=1\" \\\n  -F \"email=ahmed@example.com\" \\\n  -F \"name=Ahmed Al-Rashid\" \\\n  -F \"phone=+971501234567\""
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool: Parse and extract candidate CV",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Parse the CV of a candidate 43\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool:  Show all open job",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzYXJhaCIsInJvbGVzIjpbIlJPTEVfUkVDUlVJVEVSIl0sImlhdCI6MTc3OTcxMDUzNywiZXhwIjoxNzc5Nzk2OTM3fQ.FoJ7I7Z0jTGODamnPF8VBwB1gz3k0qQGyONt1US6WffpXlWBeRHF5EA0S1mjqS1I",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Show me all open jobs\"\n  } ",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/agent/chat \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"recruiterId\": \"recruiter-001\",\n    \"message\": \"Show me all open jobs\"\n  }'"
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool: Job description details",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzYXJhaCIsInJvbGVzIjpbIlJPTEVfUkVDUlVJVEVSIl0sImlhdCI6MTc3OTcxMDUzNywiZXhwIjoxNzc5Nzk2OTM3fQ.FoJ7I7Z0jTGODamnPF8VBwB1gz3k0qQGyONt1US6WffpXlWBeRHF5EA0S1mjqS1I",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Get full details of a job posting for job 1\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool:  Number of candidate applied for job",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"recruiterId\": \"recruiter-001\",\n    \"message\": \"Count how many candidates have applied for a job 1\"\n  } ",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool:  Get details of a single candidate",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Get details of a single candidate 21\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool: Get the top scored candidates for a specific job",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Get the top scored candidates for a job 1 min score 50\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent _tool: Get candidate score for specific job",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Get candidate 43 score for  job 1\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "agent_tool: Schedule interview",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Schedule a technical interview for candidate 43 on 2025-06-15 10:00 with interviewer Mohammad Abdelhadi\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/agent/chat \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"recruiterId\": \"recruiter-001\",\n    \"message\": \"Schedule a technical interview for candidate 1 on 2025-06-15 10:00 with interviewer John Smith\"\n  }'"
+			},
+			"response": []
+		},
+		{
+			"name": "agent_tool: List all upcoming scheduled interviews",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"List all upcoming scheduled interviews.\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/agent/chat \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"recruiterId\": \"recruiter-001\",\n    \"message\": \"Schedule a technical interview for candidate 1 on 2025-06-15 10:00 with interviewer John Smith\"\n  }'"
+			},
+			"response": []
+		},
+		{
+			"name": "agent_tool: Send an interview invitation email to a candidate",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"message\": \"Send an interview invitation email to a candidate 43 interview Id 1\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/agent/chat",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"agent",
+						"chat"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/agent/chat \\\n  -H \"Content-Type: application/json\" \\\n  -d '{\n    \"recruiterId\": \"recruiter-001\",\n    \"message\": \"Schedule a technical interview for candidate 1 on 2025-06-15 10:00 with interviewer John Smith\"\n  }'"
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/auth/register",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"sarah\",\n    \"email\": \"sarah@company.com\",\n    \"password\": \"admin\",\n    \"fullName\": \"Sarah Connor\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/auth/register",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"auth",
+						"register"
+					]
+				},
+				"description": "Generated from cURL:   curl -X POST http://localhost:8080/api/auth/register \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\n      \"username\": \"sarah\",                                                                                                                                                                                                                                                                                                                                                                                      \n      \"email\": \"sarah@company.com\",\n      \"password\": \"Secret@123\",\n      \"fullName\": \"Sarah Connor\"\n    }'"
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/auth/login",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"username\": \"sarah\",\n    \"password\": \"admin123\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/auth/login",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"auth",
+						"login"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/auth/login \\                                                                                                                                                                                                                                                                                                                                                           \n    -H \"Content-Type: application/json\" \\\n    -d '{\n      \"username\": \"admin\",\n      \"password\": \"Admin@1234\"\n    }' "
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/auth/change-password",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzYXJhaCIsInJvbGVzIjpbIlJPTEVfUkVDUlVJVEVSIl0sImlhdCI6MTc3OTcxMTY3NCwiZXhwIjoxNzc5Nzk4MDc0fQ.QmgsN5eE8pWChYBx-J5NV2GWvCBzTf4gRvVlyUnWFaZOCRrNg5jgAgAH0GU9Pvru\"",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Authorization",
+						"value": "Bearer <your-jwt>"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"currentPassword\": \"admin1\",\n    \"newPassword\": \"admin\",\n    \"confirmPassword\": \"admin\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/auth/change-password",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"auth",
+						"change-password"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST http://localhost:8080/api/auth/change-password \\\n    -H \"Authorization: Bearer <your-jwt>\" \\\n    -H \"Content-Type: application/json\" \\ \n    -d '{\n      \"currentPassword\": \"Admin@1234\",                                                                                                                                                                                                                                                                                                                                                                          \n      \"newPassword\": \"NewPass@99\",\n      \"confirmPassword\": \"NewPass@99\"\n    }'"
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/auth/forgot-password",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzYXJhaCIsInJvbGVzIjpbIlJPTEVfUkVDUlVJVEVSIl0sImlhdCI6MTc3OTcxMTk0OCwiZXhwIjoxNzc5Nzk4MzQ4fQ.2gTLlFL-MhFoVcuk4msZsXR3z6TtCdhxcvfD2eCyvpIGf3B9CkWEU1R26ZISg_wc",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\"email\": \"moh.b.abdelhadi@gmail.com\"}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/auth/forgot-password",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"auth",
+						"forgot-password"
+					]
+				},
+				"description": "Generated from cURL:  curl -X POST http://localhost:8080/api/auth/forgot-password \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\"email\": \"admin@hr-agent.com\"}'"
+			},
+			"response": []
+		},
+		{
+			"name": "http://localhost:8080/api/auth/reset-password",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n      \"token\": \"b1b7618f-891f-477b-b598-32122d9a69b7\",\n      \"newPassword\": \"admin123\",\n      \"confirmPassword\": \"admin123\"\n    }",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "http://localhost:8080/api/auth/reset-password",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"auth",
+						"reset-password"
+					]
+				},
+				"description": "Generated from cURL:  curl -X POST http://localhost:8080/api/auth/reset-password \\\n    -H \"Content-Type: application/json\" \\\n    -d '{\n      \"token\": \"2b0f1508-ec9c-45b7-9653-12024f73f60a\",\n      \"newPassword\": \"NewPass@123\",\n      \"confirmPassword\": \"NewPass@123\"\n    }'"
+			},
+			"response": []
+		}
+	]
+}

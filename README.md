@@ -8,10 +8,13 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 
 | Capability | Description |
 |---|---|
+| **JWT Authentication** | Stateless auth with signed JWTs (HS256, 24 h expiry); all agent endpoints require `Authorization: Bearer <token>` |
+| **Role-Based Access Control** | Two roles — `ROLE_ADMIN` and `ROLE_RECRUITER`; roles are embedded in the JWT and enforced per-request |
+| **Password Management** | Change password (authenticated), forgot/reset password via email token (60-min expiry) |
 | **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, and role |
 | **Candidate Scoring** | LLM scores each candidate against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
 | **Interview Scheduling** | Books interviews with conflict detection, stores date/time/type/interviewer |
-| **Email Notifications** | Sends interview invitations, rejection emails, and offer letters via Gmail SMTP |
+| **Email Notifications** | Sends interview invitations, rejection emails, offer letters, and password-reset links via Gmail SMTP |
 | **Candidate Management** | Lists jobs, candidates, filters by score threshold, updates statuses |
 | **JSON API** | All tool results returned as structured JSON for easy frontend consumption |
 
@@ -20,11 +23,13 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 ## Tech Stack
 
 - **Java 17** / **Spring Boot 3.2.5**
+- **Spring Security 6** — stateless JWT filter chain, BCrypt (cost 12)
+- **JJWT 0.12** — JWT signing / validation (HS256)
 - **LangChain4j 0.36.2** — `AiServices`, `@Tool`, `OllamaChatModel`
 - **Ollama** — runs `llama3.2:latest` locally (no cloud API key needed)
 - **Oracle 19c** — schema managed by **Liquibase**
 - **PDFBox 3** — PDF text extraction
-- **Spring Mail** — Gmail SMTP
+- **Spring Mail** — Gmail SMTP (interview notifications + password-reset emails)
 - **Lombok**, **Jackson**, **JUnit 5 + Mockito**
 
 ---
@@ -33,7 +38,10 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 
 ```
 React Frontend
+      │  Authorization: Bearer <JWT>
       │  POST /api/agent/chat  (ChatRequest)
+      ▼
+JwtAuthFilter  ──validates token──▶  SecurityContext
       ▼
 AgentController
       │  calls HrAgentService
@@ -51,6 +59,16 @@ AgentController  assembles ChatResponse { message, data }
 ```
 
 Tool results are captured in a **ThreadLocal** (`ToolResultContext`) before the LLM processes them, so the structured JSON payload reaches the frontend even when the LLM truncates its reply.
+
+Authentication flow:
+
+```
+POST /api/auth/register  or  /api/auth/login
+        │
+        ▼  AuthService → BCrypt verify → JwtUtil.generateToken()
+        ▼
+AuthResponse { token, tokenType, userId, username, email, fullName, roles }
+```
 
 ---
 
@@ -73,7 +91,20 @@ status               skills                      status
                      score
                      status
                      job_posting_id (FK)
+
+APP_USER             APP_ROLE                    USER_ROLE
+────────────         ────────────                ────────────────
+id (PK)              id (PK)                     user_id (PK, FK)
+username (unique)    name (unique)               role_id (PK, FK)
+email (unique)       description                 assigned_at
+password_hash
+full_name
+enabled
+created_at
+updated_at
 ```
+
+Roles seeded on first startup: `ROLE_ADMIN`, `ROLE_RECRUITER`. New users registered via `/api/auth/register` are automatically assigned `ROLE_RECRUITER`.
 
 ---
 
@@ -134,7 +165,16 @@ spring:
 hr:
   agent:
     cv-storage-path: /path/to/your/cv-uploads/
+  password-reset:
+    reset-url: http://localhost:3000/reset-password   # your frontend reset page
+
+security:
+  jwt:
+    secret: YOUR_SECRET_MIN_32_CHARS   # generate with: openssl rand -hex 32
+    expiration: 86400000               # 24 h in milliseconds
 ```
+
+Alternatively, supply secrets via environment variables — the defaults in `application.yml` read from `$JWT_SECRET`, `$DB_PASSWORD`, `$MAIL_USERNAME`, `$MAIL_PASSWORD`, `$CV_STORAGE_PATH`, and `$PASSWORD_RESET_URL`.
 
 ### 5. Run
 
@@ -148,64 +188,56 @@ The API will be available at `http://localhost:8080`.
 
 ## API Reference
 
-### Chat with the Agent
+A ready-to-import Postman collection covering every endpoint is included in the repository:
 
-```http
-POST /api/agent/chat
-Content-Type: application/json
-
-{
-  "recruiterId": "recruiter-1",
-  "message": "Show me all open job positions"
-}
+```
+src/main/resources/postman-collections/HR Agent Collection.postman_collection.json
 ```
 
-**Response:**
+You can also open it directly in Postman via the shared link in the collection file (`info._collection_link`).
 
-```json
-{
-  "recruiterId": "recruiter-1",
-  "message": "There are 3 open positions: Java Developer, DevOps Engineer, and Product Manager.",
-  "data": {
-    "type": "job_list",
-    "count": 3,
-    "jobs": [...]
-  },
-  "timestamp": "2026-05-24T10:00:00",
-  "success": true
-}
-```
+> All `/api/agent/*` endpoints require `Authorization: Bearer <token>`.  
+> Auth endpoints (`/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/reset-password`) are public.
 
-The `message` field is a human-readable summary from the LLM. The `data` field contains the raw structured payload for the frontend to render.
+### Auth endpoints
 
-### Upload a CV
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/register` | No | Create a new recruiter account |
+| `POST` | `/api/auth/login` | No | Log in and receive a JWT |
+| `POST` | `/api/auth/change-password` | Yes | Change password (current password required) |
+| `POST` | `/api/auth/forgot-password` | No | Send a password-reset link to the account email |
+| `POST` | `/api/auth/reset-password` | No | Reset password using the emailed token (valid 60 min) |
 
-```http
-POST /api/agent/upload-cv/{candidateId}
-Content-Type: multipart/form-data
+A default admin account is seeded on first startup — username `admin`, password `Admin@1234`.
 
-file: <PDF file>
-```
+### Agent endpoints
 
-### Health Check
+| Method | Path | Auth required | Description |
+|---|---|---|---|
+| `POST` | `/api/agent/chat` | Yes | Send a natural-language message to the HR agent |
+| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (multipart: `file`, `jobId`, `name`, `email`, `phone`) |
+| `GET`  | `/api/agent/health` | No | Health check |
 
-```http
-GET /api/agent/health
-```
+The chat endpoint accepts a JSON body `{ "message": "..." }`. The `message` field is a natural-language instruction; the agent routes it to the appropriate tool automatically. The response includes both a human-readable `message` from the LLM and a structured `data` payload for the frontend.
 
 ---
 
 ## Example Prompts
 
+These are the prompts already saved in the Postman collection:
+
 ```
-"List all open job positions"
-"Score candidate 3 against job posting 1"
-"Parse the CV for candidate 5"
-"Schedule a technical interview for candidate 2 for job 1 on 2026-06-15 10:00 with interviewer John Smith"
-"Send a rejection email to candidate 4"
-"Send an offer to candidate 7 with salary 25,000 AED starting July 1st"
-"Show me upcoming interviews"
-"What are the top candidates for the Java Developer role?"
+"Show me all open jobs"
+"Get full details of a job posting for job 1"
+"Count how many candidates have applied for a job 1"
+"Get details of a single candidate 21"
+"Get the top scored candidates for a job 1 min score 50"
+"Get candidate 43 score for job 1"
+"Parse the CV of a candidate 43"
+"Schedule a technical interview for candidate 43 on 2025-06-15 10:00 with interviewer Mohammad Abdelhadi"
+"List all upcoming scheduled interviews."
+"Send an interview invitation email to a candidate 43 interview Id 1"
 ```
 
 ---
@@ -236,11 +268,19 @@ Tests use Mockito for dependencies and real PDFBox for PDF generation — no run
 ```
 src/main/java/com/hr/agent/
 ├── config/          OllamaConfig.java
-├── controller/      AgentController.java
-├── dto/             ChatRequest, ChatResponse, CandidateProfile, ScoringResult
-├── entity/          Candidate, JobPosting, Interview
-├── repository/      CandidateRepository, JobPostingRepository, InterviewRepository
-├── service/         HrAgentService.java
+├── controller/      AgentController.java, AuthController.java
+├── dto/
+│   ├── auth/        LoginRequest, RegisterRequest, AuthResponse,
+│   │                ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
+│   └── ...          ChatRequest, ChatResponse, CandidateProfile, ScoringResult
+├── entity/          Candidate, JobPosting, Interview,
+│                    AppUser, Role, UserRole, UserRoleId, PasswordResetToken
+├── exception/       GlobalExceptionHandler, DuplicateResourceException, InvalidTokenException
+├── repository/      CandidateRepository, JobPostingRepository, InterviewRepository,
+│                    AppUserRepository, RoleRepository, PasswordResetTokenRepository
+├── security/        SecurityConfig, JwtAuthFilter, JwtUtil,
+│                    JwtAuthEntryPoint, AppUserDetailsService
+├── service/         HrAgentService.java, AuthService.java, PasswordService.java
 └── tools/
     ├── CandidateTool.java
     ├── CvParserTool.java
@@ -251,5 +291,5 @@ src/main/java/com/hr/agent/
 
 src/main/resources/
 ├── application.yml
-└── db/changelog/    Liquibase migrations (v1.0.0 → v1.0.5)
+└── db/changelog/    Liquibase migrations (v1.0.0 → v1.0.7)
 ```
