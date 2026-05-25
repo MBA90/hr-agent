@@ -253,9 +253,3 @@ src/main/resources/
 ├── application.yml
 └── db/changelog/    Liquibase migrations (v1.0.0 → v1.0.5)
 ```
-
----
-
-## License
-
-MIT
