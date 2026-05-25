@@ -18,5 +18,7 @@
     <include file="db/changelog/changes/v1.0.3-create-interview.xml"/>
     <include file="db/changelog/changes/v1.0.4-seed-data.xml"/>
     <include file="db/changelog/changes/v1.0.5-alter-cv-raw-text-clob.xml"/>
+    <include file="db/changelog/changes/v1.0.6-create-recruiter.xml"/>
+    <include file="db/changelog/changes/v1.0.7-create-password-reset-token.xml"/>
 
 </databaseChangeLog>
