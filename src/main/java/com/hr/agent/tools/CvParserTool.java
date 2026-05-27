@@ -120,8 +120,12 @@ public class CvParserTool {
             else if (line.startsWith("NATIONALITY:"))    profile.setNationality(after(line));
             else if (line.startsWith("SUMMARY:"))      profile.setSummary(after(line));
             else if (line.startsWith("EXPERIENCE_YEARS:")) {
-                try { profile.setExperienceYears(Integer.parseInt(after(line).trim())); }
-                catch (NumberFormatException ignored) { profile.setExperienceYears(0); }
+                try {
+                    String years = after(line).trim().replaceAll("[^0-9].*$", "");
+                    profile.setExperienceYears(years.isEmpty() ? 0 : Integer.parseInt(years));
+                } catch (NumberFormatException ignored) {
+                    profile.setExperienceYears(0);
+                }
             }
         }
         return profile;
