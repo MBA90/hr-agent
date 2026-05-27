@@ -76,12 +76,6 @@ public class AuthService {
 
         return AuthResponse.builder()
                 .token(token)
-                .tokenType("Bearer")
-                .userId(user.getId())
-                .username(user.getUsername())
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .roles(roleNames)
                 .build();
     }
 }
