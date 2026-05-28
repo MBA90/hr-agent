@@ -16,6 +16,7 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 | **Interview Scheduling** | Books interviews with conflict detection, stores date/time/type/interviewer |
 | **Email Notifications** | Sends interview invitations, rejection emails, offer letters, and password-reset links via Gmail SMTP |
 | **Candidate Management** | Lists jobs, candidates, filters by score threshold, updates statuses |
+| **Job Posting Management** | Create, update, close, delete, search, and get stats on job postings via natural language |
 | **JSON API** | All tool results returned as structured JSON for easy frontend consumption |
 
 ---
@@ -48,11 +49,12 @@ AgentController
       ▼
 HrAgentService  (LangChain4j AiServices proxy)
       │  tool calls dispatched automatically by the LLM
-      ├── CandidateTool   — job/candidate CRUD & queries
-      ├── CvParserTool    — PDF → LLM → structured profile
-      ├── ScoringTool     — LLM scoring against job requirements
-      ├── SchedulerTool   — interview booking & management
-      └── EmailTool       — SMTP notifications
+      ├── CandidateTool      — job/candidate CRUD & queries
+      ├── CvParserTool       — PDF → LLM → structured profile
+      ├── ScoringTool        — LLM scoring against job requirements
+      ├── SchedulerTool      — interview booking & management
+      ├── EmailTool          — SMTP notifications
+      └── JobPostingTool     — create / update / close / delete / search job postings
              │
              ▼  ThreadLocal capture (ToolResultContext)
 AgentController  assembles ChatResponse { message, data }
@@ -240,6 +242,20 @@ These are the prompts already saved in the Postman collection:
 "Send an interview invitation email to a candidate 43 interview Id 1"
 ```
 
+### Job Posting Management prompts
+
+```
+"Create a new Backend Engineer job in Engineering, requires Java and Spring Boot, 3 years experience, Dubai, salary 10000 to 15000"
+"Update job 3 to require 5 years experience and add Kubernetes to required skills"
+"Close job posting 5"
+"Mark job 2 as filled"
+"Search for DevOps jobs"
+"Show me all Engineering department jobs"
+"Show me all open Engineering jobs"
+"Give me a summary of all job postings"
+"Delete job posting 7"
+```
+
 ---
 
 ## Running Tests
@@ -257,7 +273,8 @@ mvn test
 | `EmailToolTest` | 6 |
 | `ScoringToolTest` | 6 |
 | `CvParserToolTest` | 6 |
-| **Total** | **40** |
+| `JobPostingToolTest` | 16 |
+| **Total** | **56** |
 
 Tests use Mockito for dependencies and real PDFBox for PDF generation — no running database or Ollama instance required.
 
@@ -285,6 +302,7 @@ src/main/java/com/hr/agent/
     ├── CandidateTool.java
     ├── CvParserTool.java
     ├── EmailTool.java
+    ├── JobPostingTool.java
     ├── SchedulerTool.java
     ├── ScoringTool.java
     └── ToolResultContext.java
