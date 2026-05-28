@@ -43,7 +43,8 @@ public class OllamaConfig {
             ScoringTool scoringTool,
             CandidateTool candidateTool,
             SchedulerTool schedulerTool,
-            EmailTool emailTool) {
+            EmailTool emailTool,
+            JobPostingTool jobPostingTool) {
 
         return AiServices.builder(HrAgentService.class)
                 .chatLanguageModel(chatModel)
@@ -53,7 +54,7 @@ public class OllamaConfig {
                                 .maxMessages(maxMessages)
                                 .chatMemoryStore(memoryStore)
                                 .build())
-                .tools(cvParserTool, scoringTool, candidateTool, schedulerTool, emailTool)
+                .tools(cvParserTool, scoringTool, candidateTool, schedulerTool, emailTool, jobPostingTool)
                 .build();
     }
 }
