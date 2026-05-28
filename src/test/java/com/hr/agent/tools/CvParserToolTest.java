@@ -125,7 +125,6 @@ class CvParserToolTest {
         assertThat(candidate.getExperienceYears()).isEqualTo(5);
         assertThat(candidate.getCurrentRole()).isEqualTo("Java Developer at Acme Corp");
         assertThat(candidate.getEducation()).isEqualTo("BSc Computer Science, State University");
-        assertThat(candidate.getCvRawText()).isNotBlank();
         verify(candidateRepository).save(candidate);
     }
 

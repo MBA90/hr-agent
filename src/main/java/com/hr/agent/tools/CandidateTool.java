@@ -117,6 +117,7 @@ public class CandidateTool {
     private Map<String, Object> candidateSummary(Candidate c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
+        m.put("reference_no", c.getReferenceNo());
         m.put("name", c.getFullName());
         m.put("email", c.getEmail());
         m.put("phone", c.getPhone());
@@ -130,6 +131,7 @@ public class CandidateTool {
     private Map<String, Object> candidateDetail(Candidate c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
+        m.put("reference_no", c.getReferenceNo());
         m.put("name", c.getFullName());
         m.put("email", c.getEmail());
         m.put("phone", c.getPhone());
