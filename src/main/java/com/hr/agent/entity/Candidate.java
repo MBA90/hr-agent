@@ -31,12 +31,18 @@ public class Candidate {
     @Column(name = "NATIONALITY", length = 100)
     private String nationality;
 
+    @Column(name = "REFERENCE_NO", nullable = false, unique = true, length = 20)
+    private String referenceNo;
+
+    @PrePersist
+    private void assignReferenceNo() {
+        if (referenceNo == null && id != null) {
+            referenceNo = "CND_" + id;
+        }
+    }
+
     @Column(name = "CV_FILE_PATH", length = 500)
     private String cvFilePath;
-
-    @Lob
-    @Column(name = "CV_RAW_TEXT")
-    private String cvRawText;
 
     @Column(name = "SKILLS", length = 2000)
     private String skills;

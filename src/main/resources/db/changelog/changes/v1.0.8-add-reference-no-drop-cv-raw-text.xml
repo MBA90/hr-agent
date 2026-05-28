@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v1.0.8 — Add REFERENCE_NO column to CANDIDATE and drop CV_RAW_TEXT
+    -->
+
+    <changeSet id="v1.0.8-add-reference-no" author="hr-dev">
+        <comment>Add REFERENCE_NO column with pattern CND_&lt;id&gt;</comment>
+
+        <addColumn tableName="CANDIDATE">
+            <column name="REFERENCE_NO" type="VARCHAR2(20)"/>
+        </addColumn>
+
+        <!-- Backfill existing rows -->
+        <sql>UPDATE CANDIDATE SET REFERENCE_NO = 'CND_' || ID</sql>
+
+        <addNotNullConstraint tableName="CANDIDATE" columnName="REFERENCE_NO" columnDataType="VARCHAR2(20)"/>
+
+        <addUniqueConstraint
+                tableName="CANDIDATE"
+                columnNames="REFERENCE_NO"
+                constraintName="UQ_CANDIDATE_REFERENCE_NO"/>
+
+        <rollback>
+            <dropUniqueConstraint tableName="CANDIDATE" constraintName="UQ_CANDIDATE_REFERENCE_NO"/>
+            <dropColumn tableName="CANDIDATE" columnName="REFERENCE_NO"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="v1.0.8-drop-cv-raw-text" author="hr-dev">
+        <comment>Drop CV_RAW_TEXT column — raw text is no longer stored in the database</comment>
+
+        <dropColumn tableName="CANDIDATE" columnName="CV_RAW_TEXT"/>
+
+        <rollback>
+            <addColumn tableName="CANDIDATE">
+                <column name="CV_RAW_TEXT" type="CLOB"/>
+            </addColumn>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
