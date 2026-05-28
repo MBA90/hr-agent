@@ -134,13 +134,11 @@ public class AgentController {
         try {
             Path storageDir = Paths.get(cvStoragePath);
             Files.createDirectories(storageDir);
-            String fileName = System.currentTimeMillis() + "_" + originalFilename;
-            Path filePath = storageDir.resolve(fileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             JobPosting job = jobPostingRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
 
+            // Save candidate first to obtain the generated ID
             Candidate candidate = candidateRepository.findByEmail(email)
                     .orElseGet(() -> Candidate.builder()
                             .fullName(name)
@@ -150,13 +148,20 @@ public class AgentController {
                             .status(Candidate.CandidateStatus.APPLIED)
                             .build());
 
+            candidate = candidateRepository.save(candidate);
+
+            // Store CV file named after the candidate's reference number
+            String fileName = candidate.getReferenceNo() + ".pdf";
+            Path filePath = storageDir.resolve(fileName);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
             candidate.setCvFilePath(filePath.toString());
             candidateRepository.save(candidate);
 
-            log.info("CV uploaded for candidate={} jobId={}", email, jobId);
+            log.info("CV uploaded for candidate={} referenceNo={} jobId={}", email, candidate.getReferenceNo(), jobId);
             return ResponseEntity.ok(
-                "CV uploaded successfully. Candidate ID: " + candidate.getId() +
-                ". Use the chat to parse and score this candidate."
+                "CV uploaded successfully. Candidate Reference: " + candidate.getReferenceNo() +
+                " (ID: " + candidate.getId() + "). Use the chat to parse and score this candidate."
             );
 
         } catch (Exception e) {

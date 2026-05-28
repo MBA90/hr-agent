@@ -20,5 +20,6 @@
     <include file="db/changelog/changes/v1.0.5-alter-cv-raw-text-clob.xml"/>
     <include file="db/changelog/changes/v1.0.6-create-recruiter.xml"/>
     <include file="db/changelog/changes/v1.0.7-create-password-reset-token.xml"/>
+    <include file="db/changelog/changes/v1.0.8-add-reference-no-drop-cv-raw-text.xml"/>
 
 </databaseChangeLog>

@@ -55,7 +55,6 @@ public class CvParserTool {
 
             // 3. Persist extracted data
             int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
-            candidate.setCvRawText(rawText);
             candidate.setSkills(profile.getSkills());
             candidate.setExperienceYears(experienceYears);
             candidate.setEducation(profile.getEducation());
