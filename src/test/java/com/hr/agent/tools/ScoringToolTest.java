@@ -2,10 +2,10 @@ package com.hr.agent.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.JobPosting;
-import com.hr.agent.repository.CandidateRepository;
-import com.hr.agent.repository.JobPostingRepository;
+import com.hr.agent.repository.ApplicationRepository;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,8 +25,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ScoringToolTest {
 
-    @Mock CandidateRepository candidateRepository;
-    @Mock JobPostingRepository jobPostingRepository;
+    @Mock ApplicationRepository applicationRepository;
     @Mock OllamaChatModel ollamaChatModel;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -36,8 +35,7 @@ class ScoringToolTest {
     @BeforeEach
     void setUp() {
         scoringTool = new ScoringTool(
-                candidateRepository, jobPostingRepository, ollamaChatModel,
-                objectMapper, toolResultContext);
+                applicationRepository, ollamaChatModel, objectMapper, toolResultContext);
         ReflectionTestUtils.setField(scoringTool, "minScoreThreshold", 60.0);
     }
 
@@ -50,10 +48,9 @@ class ScoringToolTest {
 
     @Test
     void scoreCandidate_shortlistsWhenScoreAboveThreshold() throws Exception {
-        Candidate candidate = candidate(1L, "Alice");
-        JobPosting job = job(1L, "Senior Java Developer");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(1L, "Alice", 1L, "Senior Java Developer");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn(llmResponse(85, "SHORTLIST",
                 "Strong Java skills", "No Kubernetes", "Excellent Spring Boot developer"));
 
@@ -65,17 +62,16 @@ class ScoringToolTest {
         assertThat(json.get("candidate_name").asText()).isEqualTo("Alice");
         assertThat(json.get("job_title").asText()).isEqualTo("Senior Java Developer");
 
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.SHORTLISTED);
-        assertThat(candidate.getScore()).isEqualTo(85.0);
-        verify(candidateRepository).save(candidate);
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.SHORTLISTED);
+        assertThat(app.getScore()).isEqualTo(85.0);
+        verify(applicationRepository).save(app);
     }
 
     @Test
     void scoreCandidate_rejectsWhenScoreBelowThreshold() throws Exception {
-        Candidate candidate = candidate(2L, "Bob");
-        JobPosting job = job(1L, "Senior Java Developer");
-        when(candidateRepository.findById(2L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(2L, "Bob", 1L, "Senior Java Developer");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(2L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn(llmResponse(40, "REJECT",
                 "Basic Java knowledge", "Missing 4 years experience", "Does not meet requirements"));
 
@@ -83,15 +79,14 @@ class ScoringToolTest {
 
         JsonNode json = objectMapper.readTree(result);
         assertThat(json.get("score").asDouble()).isEqualTo(40.0);
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.REJECTED);
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.REJECTED);
     }
 
     @Test
     void scoreCandidate_parsesAllLlmResponseFields() throws Exception {
-        Candidate candidate = candidate(1L, "Alice");
-        JobPosting job = job(1L, "Java Developer");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(1L, "Alice", 1L, "Java Developer");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn(llmResponse(78, "SHORTLIST",
                 "Spring Boot expert", "Lacks cloud experience", "Good overall fit"));
 
@@ -105,16 +100,14 @@ class ScoringToolTest {
 
     @Test
     void scoreCandidate_handlesUnparseableLlmResponse() throws Exception {
-        Candidate candidate = candidate(1L, "Alice");
-        JobPosting job = job(1L, "Java Developer");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(1L, "Alice", 1L, "Java Developer");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn("I cannot score this candidate.");
 
         String result = scoringTool.scoreCandidate(1L, 1L);
 
         JsonNode json = objectMapper.readTree(result);
-        // Falls back to default score of 50
         assertThat(json.get("score").asDouble()).isEqualTo(50.0);
         assertThat(json.get("recommendation").asText()).isEqualTo("CONSIDER");
     }
@@ -123,12 +116,10 @@ class ScoringToolTest {
 
     @Test
     void scoreAllCandidates_scoresEachUnscoredCandidate() throws Exception {
-        Candidate alice = candidate(1L, "Alice");
-        Candidate bob = candidate(2L, "Bob");
-        JobPosting job = job(1L, "Java Developer");
+        Application alice = application(1L, "Alice", 1L, "Java Developer");
+        Application bob = application(2L, "Bob", 1L, "Java Developer");
 
-        when(candidateRepository.findUnscored(1L)).thenReturn(List.of(alice, bob));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        when(applicationRepository.findUnscored(1L)).thenReturn(List.of(alice, bob));
         when(ollamaChatModel.generate(anyString()))
                 .thenReturn(llmResponse(80, "SHORTLIST", "Good skills", "None", "Strong candidate"))
                 .thenReturn(llmResponse(45, "REJECT", "Limited skills", "Missing experience", "Below threshold"));
@@ -141,44 +132,48 @@ class ScoringToolTest {
         assertThat(json.get("results").get(0).get("score").asDouble()).isEqualTo(80.0);
         assertThat(json.get("results").get(1).get("score").asDouble()).isEqualTo(45.0);
 
-        assertThat(alice.getStatus()).isEqualTo(Candidate.CandidateStatus.SHORTLISTED);
-        assertThat(bob.getStatus()).isEqualTo(Candidate.CandidateStatus.REJECTED);
-        verify(candidateRepository, times(2)).save(any(Candidate.class));
+        assertThat(alice.getStatus()).isEqualTo(Application.ApplicationStatus.SHORTLISTED);
+        assertThat(bob.getStatus()).isEqualTo(Application.ApplicationStatus.REJECTED);
+        verify(applicationRepository, times(2)).save(any(Application.class));
     }
 
     @Test
     void scoreAllCandidates_returnsEmptyBatchWhenNoneUnscored() throws Exception {
-        when(candidateRepository.findUnscored(1L)).thenReturn(List.of());
+        when(applicationRepository.findUnscored(1L)).thenReturn(List.of());
 
         String result = scoringTool.scoreAllCandidates(1L);
 
         JsonNode json = objectMapper.readTree(result);
         assertThat(json.get("count").asInt()).isEqualTo(0);
         assertThat(json.get("results").isEmpty()).isTrue();
-        verify(jobPostingRepository, never()).findById(any());
+        verify(applicationRepository, never()).save(any());
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Candidate candidate(Long id, String name) {
+    private Application application(Long candidateId, String candidateName,
+                                    Long jobId, String jobTitle) {
         Candidate c = new Candidate();
-        c.setId(id);
-        c.setFullName(name);
+        c.setId(candidateId);
+        c.setFullName(candidateName);
         c.setSkills("Java, Spring Boot");
         c.setExperienceYears(5);
         c.setEducation("BSc Computer Science");
         c.setCurrentRole("Developer");
-        return c;
-    }
 
-    private JobPosting job(Long id, String title) {
         JobPosting j = new JobPosting();
-        j.setId(id);
-        j.setTitle(title);
+        j.setId(jobId);
+        j.setTitle(jobTitle);
         j.setRequiredSkills("Java, Spring Boot");
         j.setExperienceYears(5);
         j.setDescription("Build enterprise applications");
-        return j;
+
+        Application a = new Application();
+        a.setId(candidateId);
+        a.setCandidate(c);
+        a.setJobPosting(j);
+        a.setStatus(Application.ApplicationStatus.APPLIED);
+        return a;
     }
 
     private String llmResponse(int score, String recommendation,

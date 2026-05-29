@@ -57,7 +57,7 @@ public class JobPosting {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "jobPosting", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Candidate> candidates;
+    private List<Application> applications;
 
     public enum JobStatus { OPEN, CLOSED, ON_HOLD, FILLED }
 }

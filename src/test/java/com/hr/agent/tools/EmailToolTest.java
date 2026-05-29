@@ -1,8 +1,10 @@
 package com.hr.agent.tools;
 
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.Interview;
 import com.hr.agent.entity.JobPosting;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import com.hr.agent.repository.InterviewRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,13 +29,14 @@ class EmailToolTest {
 
     @Mock JavaMailSender mailSender;
     @Mock CandidateRepository candidateRepository;
+    @Mock ApplicationRepository applicationRepository;
     @Mock InterviewRepository interviewRepository;
 
     private EmailTool emailTool;
 
     @BeforeEach
     void setUp() {
-        emailTool = new EmailTool(mailSender, candidateRepository, interviewRepository);
+        emailTool = new EmailTool(mailSender, candidateRepository, applicationRepository, interviewRepository);
         ReflectionTestUtils.setField(emailTool, "fromEmail", "hr@company.com");
     }
 
@@ -77,15 +80,15 @@ class EmailToolTest {
 
     @Test
     void sendRejectionEmail_sendsEmailAndSetsStatusToRejected() {
-        Candidate candidate = candidate(1L, "Bob", "bob@example.com");
-        candidate.setJobPosting(job(1L, "DevOps Engineer"));
-        when(candidateRepository.findByIdWithJobPosting(1L)).thenReturn(Optional.of(candidate));
+        Application application = application(1L, candidate(1L, "Bob", "bob@example.com"),
+                job(1L, "DevOps Engineer"));
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(application));
 
         String result = emailTool.sendRejectionEmail(1L);
 
         assertThat(result).contains("sent successfully");
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.REJECTED);
-        verify(candidateRepository).save(candidate);
+        assertThat(application.getStatus()).isEqualTo(Application.ApplicationStatus.REJECTED);
+        verify(applicationRepository).save(application);
 
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(captor.capture());
@@ -93,33 +96,19 @@ class EmailToolTest {
         assertThat(captor.getValue().getSubject()).contains("DevOps Engineer");
     }
 
-    @Test
-    void sendRejectionEmail_usesGenericTitleWhenJobPostingIsNull() {
-        Candidate candidate = candidate(1L, "Bob", "bob@example.com");
-        candidate.setJobPosting(null);
-        when(candidateRepository.findByIdWithJobPosting(1L)).thenReturn(Optional.of(candidate));
-
-        String result = emailTool.sendRejectionEmail(1L);
-
-        assertThat(result).contains("sent successfully");
-        ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
-        verify(mailSender).send(captor.capture());
-        assertThat(captor.getValue().getSubject()).contains("the position");
-    }
-
     // ── sendOfferEmail ────────────────────────────────────────────────────────
 
     @Test
     void sendOfferEmail_sendsEmailAndSetsStatusToOfferSent() {
-        Candidate candidate = candidate(1L, "Carol", "carol@example.com");
-        candidate.setJobPosting(job(1L, "Senior Developer"));
-        when(candidateRepository.findByIdWithJobPosting(1L)).thenReturn(Optional.of(candidate));
+        Application application = application(1L, candidate(1L, "Carol", "carol@example.com"),
+                job(1L, "Senior Developer"));
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(application));
 
         String result = emailTool.sendOfferEmail(1L, "Salary: 25,000 AED, Start: July 1st");
 
         assertThat(result).contains("sent successfully");
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.OFFER_SENT);
-        verify(candidateRepository).save(candidate);
+        assertThat(application.getStatus()).isEqualTo(Application.ApplicationStatus.OFFER_SENT);
+        verify(applicationRepository).save(application);
 
         ArgumentCaptor<SimpleMailMessage> captor = ArgumentCaptor.forClass(SimpleMailMessage.class);
         verify(mailSender).send(captor.capture());
@@ -149,7 +138,6 @@ class EmailToolTest {
         c.setId(id);
         c.setFullName(name);
         c.setEmail(email);
-        c.setStatus(Candidate.CandidateStatus.SHORTLISTED);
         return c;
     }
 
@@ -160,11 +148,20 @@ class EmailToolTest {
         return j;
     }
 
+    private Application application(Long id, Candidate candidate, JobPosting job) {
+        Application a = new Application();
+        a.setId(id);
+        a.setCandidate(candidate);
+        a.setJobPosting(job);
+        a.setStatus(Application.ApplicationStatus.SHORTLISTED);
+        return a;
+    }
+
     private Interview interview(Long id, Candidate candidate, JobPosting job) {
+        Application app = application(id, candidate, job);
         Interview i = new Interview();
         i.setId(id);
-        i.setCandidate(candidate);
-        i.setJobPosting(job);
+        i.setApplication(app);
         i.setScheduledAt(LocalDateTime.of(2026, 6, 20, 10, 0));
         i.setInterviewType("TECHNICAL");
         i.setInterviewerName("Jane Smith");

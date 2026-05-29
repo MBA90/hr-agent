@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hr.agent.dto.ChatRequest;
 import com.hr.agent.dto.ChatResponse;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.JobPosting;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import com.hr.agent.service.HrAgentService;
@@ -26,13 +28,14 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/agent")
+@RequestMapping("/api/agent") 
 @RequiredArgsConstructor
 @Slf4j
 public class AgentController {
 
     private final HrAgentService hrAgentService;
     private final CandidateRepository candidateRepository;
+    private final ApplicationRepository applicationRepository;
     private final JobPostingRepository jobPostingRepository;
     private final ObjectMapper objectMapper;
     private final ToolResultContext toolResultContext;
@@ -138,29 +141,35 @@ public class AgentController {
             JobPosting job = jobPostingRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
 
-            // Save candidate first to obtain the generated ID
+            // Save candidate first to obtain the generated ID 
             Candidate candidate = candidateRepository.findByEmail(email)
                     .orElseGet(() -> Candidate.builder()
                             .fullName(name)
                             .email(email)
                             .phone(phone)
-                            .jobPosting(job)
-                            .status(Candidate.CandidateStatus.APPLIED)
                             .build());
 
             candidate = candidateRepository.save(candidate);
 
-            // Store CV file named after the candidate's reference number
-            String fileName = candidate.getReferenceNo() + ".pdf";
+            // Create application if this candidate hasn't applied for this job yet
+            final Candidate savedCandidate = candidate;
+            applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(candidate.getId(), jobId)
+                    .orElseGet(() -> applicationRepository.save(Application.builder()
+                            .candidate(savedCandidate)
+                            .jobPosting(job)
+                            .status(Application.ApplicationStatus.APPLIED)
+                            .build()));
+
+            String fileName = "CND_" + candidate.getId() + ".pdf";
             Path filePath = storageDir.resolve(fileName);
             Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
-            candidate.setCvFilePath(filePath.toString());
+            candidate.setCvFilePath("./cv-uploads/" + fileName);
             candidateRepository.save(candidate);
 
-            log.info("CV uploaded for candidate={} referenceNo={} jobId={}", email, candidate.getReferenceNo(), jobId);
+            log.info("CV uploaded for candidate={} cndRefNo={} jobId={}", email, candidate.getCndRefNo(), jobId);
             return ResponseEntity.ok(
-                "CV uploaded successfully. Candidate Reference: " + candidate.getReferenceNo() +
+                "CV uploaded successfully. Candidate Reference: " + candidate.getCndRefNo() +
                 " (ID: " + candidate.getId() + "). Use the chat to parse and score this candidate."
             );
 
