@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.4 — INTERVIEW table
+        Linked to APPLICATION (not directly to CANDIDATE or JOB_POSTING).
+        Author : hr-dev
+    -->
+
+    <changeSet id="v2.0.4-create-interview" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="INTERVIEW"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE INTERVIEW (
+                ID               NUMBER          CONSTRAINT PK_INTERVIEW          PRIMARY KEY,
+                APPLICATION_ID   NUMBER          CONSTRAINT NN_INT_APP_ID         NOT NULL,
+                SCHEDULED_AT     TIMESTAMP       CONSTRAINT NN_INT_SCHED_AT       NOT NULL,
+                DURATION_MINUTES NUMBER(5)       DEFAULT 60,
+                INTERVIEW_TYPE   VARCHAR2(50),
+                MEETING_LINK     VARCHAR2(500),
+                INTERVIEWER_NAME VARCHAR2(200),
+                NOTES            VARCHAR2(2000),
+                FEEDBACK         VARCHAR2(4000),
+                STATUS           VARCHAR2(30)    DEFAULT 'SCHEDULED'
+                                                 CONSTRAINT NN_INT_STATUS         NOT NULL,
+                CREATED_AT       TIMESTAMP       DEFAULT SYSTIMESTAMP
+                                                 CONSTRAINT NN_INT_CREATED_AT     NOT NULL,
+                CONSTRAINT FK_INT_APPLICATION FOREIGN KEY (APPLICATION_ID)
+                    REFERENCES APPLICATION (ID) ON DELETE CASCADE,
+                CONSTRAINT CHK_INT_STATUS CHECK (STATUS IN (
+                    'SCHEDULED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW'))
+            )
+        </sql>
+
+        <sql>CREATE INDEX IDX_INT_APPLICATION  ON INTERVIEW (APPLICATION_ID)</sql>
+        <sql>CREATE INDEX IDX_INT_SCHEDULED_AT ON INTERVIEW (SCHEDULED_AT)</sql>
+
+        <rollback>
+            <sql>DROP TABLE INTERVIEW CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

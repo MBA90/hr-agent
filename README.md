@@ -12,23 +12,24 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 | **Role-Based Access Control** | Two roles — `ROLE_ADMIN` and `ROLE_RECRUITER`; roles are embedded in the JWT and enforced per-request |
 | **Password Management** | Change password (authenticated), forgot/reset password via email token (60-min expiry) |
 | **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, and role |
-| **Candidate Scoring** | LLM scores each candidate against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
-| **Interview Scheduling** | Books interviews with conflict detection, stores date/time/type/interviewer |
+| **Candidate Scoring** | LLM scores each application against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
+| **Interview Scheduling** | Books interviews against an application ID with conflict detection, stores date/time/type/interviewer |
 | **Email Notifications** | Sends interview invitations, rejection emails, offer letters, and password-reset links via Gmail SMTP |
-| **Candidate Management** | Lists jobs, candidates, filters by score threshold, updates statuses |
+| **Candidate Management** | Lists jobs and candidates, filters by score threshold, updates application statuses |
 | **Job Posting Management** | Create, update, close, delete, search, and get stats on job postings via natural language |
+| **Multi-Application Support** | One candidate can apply to multiple jobs simultaneously — each application tracks its own status, score, and timeline |
 | **JSON API** | All tool results returned as structured JSON for easy frontend consumption |
 
 ---
 
 ## Tech Stack
 
-- **Java 17** / **Spring Boot 3.2.5**
+- **Java 21** / **Spring Boot 3.2.5**
 - **Spring Security 6** — stateless JWT filter chain, BCrypt (cost 12)
 - **JJWT 0.12** — JWT signing / validation (HS256)
 - **LangChain4j 0.36.2** — `AiServices`, `@Tool`, `OllamaChatModel`
 - **Ollama** — runs `llama3.2:latest` locally (no cloud API key needed)
-- **Oracle 19c** — schema managed by **Liquibase**
+- **Oracle 19c** — schema managed by **Liquibase** (native Oracle SQL migrations)
 - **PDFBox 3** — PDF text extraction
 - **Spring Mail** — Gmail SMTP (interview notifications + password-reset emails)
 - **Lombok**, **Jackson**, **JUnit 5 + Mockito**
@@ -49,9 +50,9 @@ AgentController
       ▼
 HrAgentService  (LangChain4j AiServices proxy)
       │  tool calls dispatched automatically by the LLM
-      ├── CandidateTool      — job/candidate CRUD & queries
+      ├── CandidateTool      — job/candidate/application queries & status updates
       ├── CvParserTool       — PDF → LLM → structured profile
-      ├── ScoringTool        — LLM scoring against job requirements
+      ├── ScoringTool        — LLM scoring of applications against job requirements
       ├── SchedulerTool      — interview booking & management
       ├── EmailTool          — SMTP notifications
       └── JobPostingTool     — create / update / close / delete / search job postings
@@ -75,47 +76,74 @@ AuthResponse { token, tokenType, userId, username, email, fullName, roles }
 ---
 
 ## Database Schema
-
 ```
-JOB_POSTING          CANDIDATE                   INTERVIEW
-────────────         ──────────────────          ────────────────
-id (PK)              id (PK)                     id (PK)
-title                full_name                   candidate_id (FK)
-department           email                       job_posting_id (FK)
-location             phone                       scheduled_at
-required_skills      nationality                 interview_type
-experience_years     cv_file_path                interviewer_name
-description          cv_raw_text (CLOB)          duration_minutes
-status               skills                      status
-                     experience_years            notes
-                     education
-                     current_role
-                     score
-                     status
-                     job_posting_id (FK)
+ ┌──────────────────────┐               ┌───────────────────────┐               ┌──────────────────────┐
+ │      JOB_POSTING     │               │      APPLICATION      │               │      CANDIDATE       │
+ ├──────────────────────┤               ├───────────────────────┤               ├──────────────────────┤
+ │ PK  id               │  1        *   │ PK  id                │   *        1  │ PK  id               │
+ │     title            │◄──────────────│ FK  job_posting_id    │───────────────│ UQ  cnd_ref_no       │
+ │     department       │               │ FK  candidate_id      │──────────────►│     full_name        │
+ │     description      │               │ UQ  app_ref_no        │               │ UQ  email            │
+ │     required_skills  │               │     status            │               │     phone            │
+ │     experience_years │               │     score             │               │     nationality      │
+ │     location         │               │     score_reason      │               │     cv_file_path     │
+ │     salary_min       │               │     applied_at        │               │     skills           │
+ │     salary_max       │               │     updated_at        │               │     experience_years │
+ │     status           │               └───────────┬───────────┘               │     education        │
+ │     created_at       │                           │ 1                         │     current_role     │
+ │     updated_at       │                           │                           │     updated_at       │
+ └──────────────────────┘                           │ *                         └──────────────────────┘
+                                       ┌────────────▼────────────┐
+                                       │        INTERVIEW        │
+                                       ├─────────────────────────┤
+                                       │ PK  id                  │
+                                       │ FK  application_id      │
+                                       │     scheduled_at        │
+                                       │     duration_minutes    │
+                                       │     interview_type      │
+                                       │     meeting_link        │
+                                       │     interviewer_name    │
+                                       │     notes               │
+                                       │     feedback            │
+                                       │     status              │
+                                       │     created_at          │
+                                       └─────────────────────────┘
 
-APP_USER             APP_ROLE                    USER_ROLE
-────────────         ────────────                ────────────────
-id (PK)              id (PK)                     user_id (PK, FK)
-username (unique)    name (unique)               role_id (PK, FK)
-email (unique)       description                 assigned_at
-password_hash
-full_name
-enabled
-created_at
-updated_at
+
+ ┌─────────────────────────┐               ┌──────────────────┐               ┌────────────────┐
+ │        APP_USER         │               │    USER_ROLE     │               │    APP_ROLE    │
+ ├─────────────────────────┤               ├──────────────────┤               ├────────────────┤
+ │ PK  id                  │  1        *   │ PK,FK  user_id   │   *        1  │ PK  id         │
+ │ UQ  username            │◄──────────────│ PK,FK  role_id   │──────────────►│ UQ  name       │
+ │ UQ  email               │               │        assigned_at│               │     description│
+ │     password_hash       │               └──────────────────┘               └────────────────┘
+ │     full_name           │
+ │     enabled             │
+ │     created_at          │
+ │     updated_at          │
+ └────────────┬────────────┘
+              │ 1
+              │
+              │ *
+ ┌────────────▼────────────┐
+ │  PASSWORD_RESET_TOKEN   │
+ ├─────────────────────────┤
+ │ PK  id                  │
+ │ UQ  token               │
+ │ FK  user_id             │
+ │     expires_at          │
+ │     used                │
+ │     created_at          │
+ └─────────────────────────┘
 ```
-
-Roles seeded on first startup: `ROLE_ADMIN`, `ROLE_RECRUITER`. New users registered via `/api/auth/register` are automatically assigned `ROLE_RECRUITER`.
-
 ---
 
 ## Prerequisites
 
 | Requirement | Notes |
 |---|---|
-| Java 17+ | |
-| Maven 3.9+ | or use `./mvnw` |
+| Java 21+ | |
+| Maven 3.9+ | |
 | Oracle 19c | Schema: `hr_agent` / password: your choice |
 | Ollama | Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
 | Gmail App Password | Required for SMTP — see setup below |
@@ -137,7 +165,6 @@ Liquibase runs all migrations automatically on startup.
 ### 2. Ollama
 
 ```bash
-# Install Ollama, then pull the model
 ollama pull llama3.2
 ollama serve          # starts on http://localhost:11434
 ```
@@ -151,7 +178,7 @@ ollama serve          # starts on http://localhost:11434
 
 ### 4. Configuration
 
-Create `src/main/resources/application-local.yml` (this file is git-ignored):
+Create `src/main/resources/application-local.yml` (git-ignored):
 
 ```yaml
 spring:
@@ -168,15 +195,15 @@ hr:
   agent:
     cv-storage-path: /path/to/your/cv-uploads/
   password-reset:
-    reset-url: http://localhost:3000/reset-password   # your frontend reset page
+    reset-url: http://localhost:3000/reset-password
 
 security:
   jwt:
-    secret: YOUR_SECRET_MIN_32_CHARS   # generate with: openssl rand -hex 32
+    secret: YOUR_SECRET_MIN_32_CHARS   # openssl rand -hex 32
     expiration: 86400000               # 24 h in milliseconds
 ```
 
-Alternatively, supply secrets via environment variables — the defaults in `application.yml` read from `$JWT_SECRET`, `$DB_PASSWORD`, `$MAIL_USERNAME`, `$MAIL_PASSWORD`, `$CV_STORAGE_PATH`, and `$PASSWORD_RESET_URL`.
+Alternatively, supply secrets via environment variables: `$JWT_SECRET`, `$DB_PASSWORD`, `$MAIL_USERNAME`, `$MAIL_PASSWORD`, `$CV_STORAGE_PATH`, `$PASSWORD_RESET_URL`.
 
 ### 5. Run
 
@@ -190,20 +217,18 @@ The API will be available at `http://localhost:8080`.
 
 ## API Reference
 
-A ready-to-import Postman collection covering every endpoint is included in the repository:
+A ready-to-import Postman collection covering every endpoint is included:
 
 ```
 src/main/resources/postman-collections/HR Agent Collection.postman_collection.json
 ```
 
-You can also open it directly in Postman via the shared link in the collection file (`info._collection_link`).
-
 > All `/api/agent/*` endpoints require `Authorization: Bearer <token>`.  
-> Auth endpoints (`/api/auth/login`, `/api/auth/register`, `/api/auth/forgot-password`, `/api/auth/reset-password`) are public.
+> Auth endpoints are public.
 
 ### Auth endpoints
 
-| Method | Path | Auth required | Description |
+| Method | Path | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/auth/register` | No | Create a new recruiter account |
 | `POST` | `/api/auth/login` | No | Log in and receive a JWT |
@@ -215,34 +240,63 @@ A default admin account is seeded on first startup — username `admin`, passwor
 
 ### Agent endpoints
 
-| Method | Path | Auth required | Description |
+| Method | Path | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/agent/chat` | Yes | Send a natural-language message to the HR agent |
-| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (multipart: `file`, `jobId`, `name`, `email`, `phone`) |
+| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (`file`, `jobId`, `name`, `email`, `phone`); file is saved as `CND_<id>.pdf` |
 | `GET`  | `/api/agent/health` | No | Health check |
 
-The chat endpoint accepts a JSON body `{ "message": "..." }`. The `message` field is a natural-language instruction; the agent routes it to the appropriate tool automatically. The response includes both a human-readable `message` from the LLM and a structured `data` payload for the frontend.
+The chat endpoint accepts `{ "message": "..." }`. The agent routes the message to the appropriate tool automatically. The response includes a human-readable `message` from the LLM and a structured `data` payload.
 
 ---
 
 ## Example Prompts
 
-These are the prompts already saved in the Postman collection:
+### Job & Candidate queries
 
 ```
 "Show me all open jobs"
-"Get full details of a job posting for job 1"
-"Count how many candidates have applied for a job 1"
-"Get details of a single candidate 21"
-"Get the top scored candidates for a job 1 min score 50"
-"Get candidate 43 score for job 1"
-"Parse the CV of a candidate 43"
-"Schedule a technical interview for candidate 43 on 2025-06-15 10:00 with interviewer Mohammad Abdelhadi"
-"List all upcoming scheduled interviews."
-"Send an interview invitation email to a candidate 43 interview Id 1"
+"Get full details of job 1"
+"How many candidates have applied for job 1?"
+"Get details of candidate 5"
+"Show all candidates who applied for job 1"
+"Get the top scored candidates for job 1 with min score 60"
+"Get details of application 3"
 ```
 
-### Job Posting Management prompts
+### CV Parsing & Scoring
+
+```
+"Parse the CV of candidate 5"
+"Score candidate 5 for job 1"
+"Score all unscored candidates for job 1"
+```
+
+### Application Status
+
+```
+"Update the status of application 3 to SHORTLISTED"
+"Update application 2 to HIRED"
+```
+
+### Interview Scheduling
+
+```
+"Schedule a technical interview for application 3 on 2025-06-15 10:00 with interviewer Mohammad Abdelhadi"
+"List all upcoming scheduled interviews"
+"Cancel interview 2, reason: candidate withdrew"
+"Get all interviews for candidate 5"
+```
+
+### Email Notifications
+
+```
+"Send an interview invitation to candidate 5 for interview 1"
+"Send a rejection email for application 3"
+"Send a job offer for application 3 with salary 25000 AED starting July 1st"
+```
+
+### Job Posting Management
 
 ```
 "Create a new Backend Engineer job in Engineering, requires Java and Spring Boot, 3 years experience, Dubai, salary 10000 to 15000"
@@ -251,7 +305,6 @@ These are the prompts already saved in the Postman collection:
 "Mark job 2 as filled"
 "Search for DevOps jobs"
 "Show me all Engineering department jobs"
-"Show me all open Engineering jobs"
 "Give me a summary of all job postings"
 "Delete job posting 7"
 ```
@@ -264,19 +317,20 @@ These are the prompts already saved in the Postman collection:
 mvn test
 ```
 
-40 unit tests covering all tool classes:
+55 unit tests covering all tool classes:
 
 | Test Class | Tests |
 |---|---|
 | `CandidateToolTest` | 12 |
-| `SchedulerToolTest` | 9 |
-| `EmailToolTest` | 6 |
-| `ScoringToolTest` | 6 |
-| `CvParserToolTest` | 6 |
 | `JobPostingToolTest` | 16 |
-| **Total** | **56** |
+| `SchedulerToolTest` | 9 |
+| `CvParserToolTest` | 6 |
+| `EmailToolTest` | 5 |
+| `ScoringToolTest` | 6 |
+| `HrAgentApplicationTests` | 1 |
+| **Total** | **55** |
 
-Tests use Mockito for dependencies and real PDFBox for PDF generation — no running database or Ollama instance required.
+Tests use Mockito for all dependencies and real PDFBox for PDF generation — no running database or Ollama instance required.
 
 ---
 
@@ -290,11 +344,12 @@ src/main/java/com/hr/agent/
 │   ├── auth/        LoginRequest, RegisterRequest, AuthResponse,
 │   │                ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
 │   └── ...          ChatRequest, ChatResponse, CandidateProfile, ScoringResult
-├── entity/          Candidate, JobPosting, Interview,
+├── entity/          Candidate, Application, JobPosting, Interview,
 │                    AppUser, Role, UserRole, UserRoleId, PasswordResetToken
 ├── exception/       GlobalExceptionHandler, DuplicateResourceException, InvalidTokenException
-├── repository/      CandidateRepository, JobPostingRepository, InterviewRepository,
-│                    AppUserRepository, RoleRepository, PasswordResetTokenRepository
+├── repository/      CandidateRepository, ApplicationRepository, JobPostingRepository,
+│                    InterviewRepository, AppUserRepository, RoleRepository,
+│                    PasswordResetTokenRepository
 ├── security/        SecurityConfig, JwtAuthFilter, JwtUtil,
 │                    JwtAuthEntryPoint, AppUserDetailsService
 ├── service/         HrAgentService.java, AuthService.java, PasswordService.java
@@ -309,5 +364,14 @@ src/main/java/com/hr/agent/
 
 src/main/resources/
 ├── application.yml
-└── db/changelog/    Liquibase migrations (v1.0.0 → v1.0.7)
+└── db/changelog/
+    ├── db.changelog-master.xml
+    └── changes/
+        ├── v2.0.0-create-sequences.xml
+        ├── v2.0.1-create-job-posting.xml
+        ├── v2.0.2-create-candidate.xml
+        ├── v2.0.3-create-application.xml
+        ├── v2.0.4-create-interview.xml
+        ├── v2.0.5-create-auth.xml
+        └── v2.0.6-seed-data.xml
 ```

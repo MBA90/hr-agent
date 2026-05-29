@@ -6,19 +6,17 @@
                             https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
     <!--
-        MASTER CHANGELOG
-        ════════════════
-        Add new migration files below in version order.
-        Liquibase runs them once and tracks them in DATABASECHANGELOG table.
+        MASTER CHANGELOG — v2.x.x (clean Oracle-native rebuild)
+        All DDL/DML uses native Oracle SQL via <sql> tags.
+        Assumes a completely empty schema with no prior objects.
     -->
 
-    <include file="db/changelog/changes/v1.0.0-create-sequences.xml"/>
-    <include file="db/changelog/changes/v1.0.1-create-job-posting.xml"/>
-    <include file="db/changelog/changes/v1.0.2-create-candidate.xml"/>
-    <include file="db/changelog/changes/v1.0.3-create-interview.xml"/>
-    <include file="db/changelog/changes/v1.0.4-seed-data.xml"/>
-    <include file="db/changelog/changes/v1.0.5-alter-cv-raw-text-clob.xml"/>
-    <include file="db/changelog/changes/v1.0.6-create-recruiter.xml"/>
-    <include file="db/changelog/changes/v1.0.7-create-password-reset-token.xml"/>
+    <include file="db/changelog/changes/v2.0.0-create-sequences.xml"/>
+    <include file="db/changelog/changes/v2.0.1-create-job-posting.xml"/>
+    <include file="db/changelog/changes/v2.0.2-create-candidate.xml"/>
+    <include file="db/changelog/changes/v2.0.3-create-application.xml"/>
+    <include file="db/changelog/changes/v2.0.4-create-interview.xml"/>
+    <include file="db/changelog/changes/v2.0.5-create-auth.xml"/>
+    <include file="db/changelog/changes/v2.0.6-seed-data.xml"/>
 
 </databaseChangeLog>

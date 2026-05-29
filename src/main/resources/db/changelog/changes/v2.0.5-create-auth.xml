@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.5 — Authentication and authorisation tables
+        Tables : APP_ROLE, APP_USER, USER_ROLE, PASSWORD_RESET_TOKEN
+        NOTE   : USER and ROLE are Oracle reserved words — prefixed with APP_.
+        Author : hr-dev
+    -->
+
+    <!-- ── APP_ROLE ────────────────────────────────────────────────────────── -->
+
+    <changeSet id="v2.0.5-create-app-role" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="APP_ROLE"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE APP_ROLE (
+                ID          NUMBER(10)    CONSTRAINT PK_APP_ROLE   PRIMARY KEY,
+                NAME        VARCHAR2(50)  CONSTRAINT NN_ROLE_NAME  NOT NULL,
+                DESCRIPTION VARCHAR2(200),
+                CONSTRAINT UQ_ROLE_NAME UNIQUE (NAME)
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE APP_ROLE CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── APP_USER ────────────────────────────────────────────────────────── -->
+
+    <changeSet id="v2.0.5-create-app-user" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="APP_USER"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE APP_USER (
+                ID            NUMBER(19)    CONSTRAINT PK_APP_USER     PRIMARY KEY,
+                USERNAME      VARCHAR2(100) CONSTRAINT NN_USR_USERNAME NOT NULL,
+                EMAIL         VARCHAR2(200) CONSTRAINT NN_USR_EMAIL    NOT NULL,
+                PASSWORD_HASH VARCHAR2(255) CONSTRAINT NN_USR_PWD_HASH NOT NULL,
+                FULL_NAME     VARCHAR2(200) CONSTRAINT NN_USR_FULLNAME NOT NULL,
+                ENABLED       NUMBER(1)     DEFAULT 1
+                                            CONSTRAINT NN_USR_ENABLED  NOT NULL,
+                CREATED_AT    TIMESTAMP     CONSTRAINT NN_USR_CREATED  NOT NULL,
+                UPDATED_AT    TIMESTAMP,
+                CONSTRAINT UQ_USR_USERNAME  UNIQUE (USERNAME),
+                CONSTRAINT UQ_USR_EMAIL     UNIQUE (EMAIL),
+                CONSTRAINT CHK_USR_ENABLED  CHECK (ENABLED IN (0, 1))
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE APP_USER CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── USER_ROLE ──────────────────────────────────────────────────────── -->
+
+    <changeSet id="v2.0.5-create-user-role" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="USER_ROLE"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE USER_ROLE (
+                USER_ID     NUMBER(19)  CONSTRAINT NN_UR_USER_ID NOT NULL,
+                ROLE_ID     NUMBER(10)  CONSTRAINT NN_UR_ROLE_ID NOT NULL,
+                ASSIGNED_AT TIMESTAMP   DEFAULT SYSTIMESTAMP,
+                CONSTRAINT PK_USER_ROLE PRIMARY KEY (USER_ID, ROLE_ID),
+                CONSTRAINT FK_UR_USER   FOREIGN KEY (USER_ID)
+                    REFERENCES APP_USER (ID) ON DELETE CASCADE,
+                CONSTRAINT FK_UR_ROLE   FOREIGN KEY (ROLE_ID)
+                    REFERENCES APP_ROLE (ID) ON DELETE CASCADE
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE USER_ROLE CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── PASSWORD_RESET_TOKEN ───────────────────────────────────────────── -->
+
+    <changeSet id="v2.0.5-create-password-reset-token" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="PASSWORD_RESET_TOKEN"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE PASSWORD_RESET_TOKEN (
+                ID         NUMBER(19)    CONSTRAINT PK_PRT        PRIMARY KEY,
+                TOKEN      VARCHAR2(100) CONSTRAINT NN_PRT_TOKEN  NOT NULL,
+                USER_ID    NUMBER(19)    CONSTRAINT NN_PRT_USER   NOT NULL,
+                EXPIRES_AT TIMESTAMP     CONSTRAINT NN_PRT_EXPIRY NOT NULL,
+                USED       NUMBER(1)     DEFAULT 0
+                                         CONSTRAINT NN_PRT_USED   NOT NULL,
+                CREATED_AT TIMESTAMP     DEFAULT SYSTIMESTAMP,
+                CONSTRAINT UQ_PRT_TOKEN  UNIQUE (TOKEN),
+                CONSTRAINT FK_PRT_USER   FOREIGN KEY (USER_ID)
+                    REFERENCES APP_USER (ID) ON DELETE CASCADE,
+                CONSTRAINT CHK_PRT_USED  CHECK (USED IN (0, 1))
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE PASSWORD_RESET_TOKEN CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

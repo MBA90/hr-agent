@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hr.agent.dto.ChatRequest;
 import com.hr.agent.dto.ChatResponse;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.JobPosting;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import com.hr.agent.service.HrAgentService;
@@ -26,13 +28,14 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 
 @RestController
-@RequestMapping("/api/agent")
+@RequestMapping("/api/agent") 
 @RequiredArgsConstructor
 @Slf4j
 public class AgentController {
 
     private final HrAgentService hrAgentService;
     private final CandidateRepository candidateRepository;
+    private final ApplicationRepository applicationRepository;
     private final JobPostingRepository jobPostingRepository;
     private final ObjectMapper objectMapper;
     private final ToolResultContext toolResultContext;
@@ -134,9 +137,6 @@ public class AgentController {
         try {
             Path storageDir = Paths.get(cvStoragePath);
             Files.createDirectories(storageDir);
-            String fileName = System.currentTimeMillis() + "_" + originalFilename;
-            Path filePath = storageDir.resolve(fileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
             JobPosting job = jobPostingRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
@@ -146,11 +146,24 @@ public class AgentController {
                             .fullName(name)
                             .email(email)
                             .phone(phone)
-                            .jobPosting(job)
-                            .status(Candidate.CandidateStatus.APPLIED)
                             .build());
 
-            candidate.setCvFilePath(filePath.toString());
+            candidate = candidateRepository.save(candidate);
+
+            // Create application if this candidate hasn't applied for this job yet
+            final Candidate savedCandidate = candidate;
+            applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(candidate.getId(), jobId)
+                    .orElseGet(() -> applicationRepository.save(Application.builder()
+                            .candidate(savedCandidate)
+                            .jobPosting(job)
+                            .status(Application.ApplicationStatus.APPLIED)
+                            .build()));
+
+            String fileName = "CND_" + candidate.getId() + ".pdf";
+            Path filePath = storageDir.resolve(fileName);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+
+            candidate.setCvFilePath("./cv-uploads/" + fileName);
             candidateRepository.save(candidate);
 
             log.info("CV uploaded for candidate={} jobId={}", email, jobId);

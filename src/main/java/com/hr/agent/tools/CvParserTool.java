@@ -1,11 +1,12 @@
 package com.hr.agent.tools;
 
 import com.hr.agent.dto.CandidateProfile;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.ollama.OllamaChatModel;
-import dev.langchain4j.data.message.UserMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
@@ -15,20 +16,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
+import java.util.List;
 
-/**
- * Tool: CV Parser
- * ───────────────
- * Reads a candidate's PDF CV from disk, extracts raw text via PDFBox,
- * then asks the LLM to parse it into structured CandidateProfile fields.
- * Finally saves the extracted data back to the CANDIDATE table.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CvParserTool {
 
     private final CandidateRepository candidateRepository;
+    private final ApplicationRepository applicationRepository;
     private final OllamaChatModel ollamaChatModel;
 
     @Value("${hr.agent.cv-storage-path:./cv-uploads/}")
@@ -47,22 +43,22 @@ public class CvParserTool {
         }
 
         try {
-            // 1. Extract raw text from PDF
             String rawText = extractTextFromPdf(candidate.getCvFilePath());
-
-            // 2. Ask LLM to parse into structured fields
             CandidateProfile profile = extractProfileWithLlm(rawText);
 
-            // 3. Persist extracted data
             int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
-            candidate.setCvRawText(rawText);
             candidate.setSkills(profile.getSkills());
             candidate.setExperienceYears(experienceYears);
             candidate.setEducation(profile.getEducation());
             candidate.setCurrentRole(profile.getCurrentRole());
             candidate.setNationality(profile.getNationality());
-            candidate.setStatus(Candidate.CandidateStatus.CV_REVIEWED);
             candidateRepository.save(candidate);
+
+            // Move all pending applications to CV_REVIEWED
+            List<Application> pending = applicationRepository.findByCandidateIdAndStatus(
+                    candidateId, Application.ApplicationStatus.APPLIED);
+            pending.forEach(a -> a.setStatus(Application.ApplicationStatus.CV_REVIEWED));
+            applicationRepository.saveAll(pending);
 
             log.info("CV parsed successfully for candidate={}", candidate.getFullName());
             return String.format(
@@ -82,7 +78,6 @@ public class CvParserTool {
     private String extractTextFromPdf(String filePath) throws Exception {
         File pdfFile = new File(filePath);
         if (!pdfFile.exists()) {
-            // Try relative to cv-storage-path
             pdfFile = new File(cvStoragePath + filePath);
         }
         try (PDDocument doc = Loader.loadPDF(pdfFile)) {
@@ -93,7 +88,7 @@ public class CvParserTool {
     private CandidateProfile extractProfileWithLlm(String rawText) {
         String prompt = """
             Extract the following information from this CV text and respond ONLY in this exact format:
-            
+
             FULL_NAME: <full name>
             CURRENT_ROLE: <current job title and company>
             EXPERIENCE_YEARS: <total years of professional experience as a number>
@@ -101,12 +96,11 @@ public class CvParserTool {
             EDUCATION: <highest degree and institution>
             NATIONALITY: <nationality>
             SUMMARY: <2-sentence professional summary>
-            
+
             CV TEXT:
             """ + rawText;
 
         String response = ollamaChatModel.generate(prompt);
-
         return parseProfileResponse(response);
     }
 
@@ -117,7 +111,7 @@ public class CvParserTool {
             else if (line.startsWith("CURRENT_ROLE:")) profile.setCurrentRole(after(line));
             else if (line.startsWith("SKILLS:"))       profile.setSkills(after(line));
             else if (line.startsWith("EDUCATION:"))    profile.setEducation(after(line));
-            else if (line.startsWith("NATIONALITY:"))    profile.setNationality(after(line));
+            else if (line.startsWith("NATIONALITY:"))  profile.setNationality(after(line));
             else if (line.startsWith("SUMMARY:"))      profile.setSummary(after(line));
             else if (line.startsWith("EXPERIENCE_YEARS:")) {
                 try {

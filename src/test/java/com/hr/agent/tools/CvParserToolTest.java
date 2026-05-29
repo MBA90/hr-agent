@@ -1,6 +1,8 @@
 package com.hr.agent.tools;
 
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -29,6 +31,7 @@ import static org.mockito.Mockito.*;
 class CvParserToolTest {
 
     @Mock CandidateRepository candidateRepository;
+    @Mock ApplicationRepository applicationRepository;
     @Mock OllamaChatModel ollamaChatModel;
 
     @TempDir Path tempDir;
@@ -37,7 +40,7 @@ class CvParserToolTest {
 
     @BeforeEach
     void setUp() {
-        cvParserTool = new CvParserTool(candidateRepository, ollamaChatModel);
+        cvParserTool = new CvParserTool(candidateRepository, applicationRepository, ollamaChatModel);
         ReflectionTestUtils.setField(cvParserTool, "cvStoragePath", tempDir.toString() + "/");
     }
 
@@ -107,6 +110,8 @@ class CvParserToolTest {
         candidate.setEmail("alice@example.com");
         candidate.setCvFilePath(pdfPath.toString());
         when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
+        when(applicationRepository.findByCandidateIdAndStatus(1L, Application.ApplicationStatus.APPLIED))
+                .thenReturn(java.util.List.of());
         when(ollamaChatModel.generate(anyString())).thenReturn("""
                 FULL_NAME: Alice Johnson
                 CURRENT_ROLE: Java Developer at Acme Corp
@@ -120,12 +125,10 @@ class CvParserToolTest {
 
         assertThat(result).contains("Alice Johnson");
         assertThat(result).contains("Java, Spring Boot, Docker");
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.CV_REVIEWED);
         assertThat(candidate.getSkills()).isEqualTo("Java, Spring Boot, Docker");
         assertThat(candidate.getExperienceYears()).isEqualTo(5);
         assertThat(candidate.getCurrentRole()).isEqualTo("Java Developer at Acme Corp");
         assertThat(candidate.getEducation()).isEqualTo("BSc Computer Science, State University");
-        assertThat(candidate.getCvRawText()).isNotBlank();
         verify(candidateRepository).save(candidate);
     }
 
@@ -139,6 +142,8 @@ class CvParserToolTest {
         candidate.setFullName("Bob Smith");
         candidate.setCvFilePath(pdfPath.toString());
         when(candidateRepository.findById(2L)).thenReturn(Optional.of(candidate));
+        when(applicationRepository.findByCandidateIdAndStatus(2L, Application.ApplicationStatus.APPLIED))
+                .thenReturn(java.util.List.of());
         when(ollamaChatModel.generate(anyString())).thenReturn("I cannot parse this CV.");
 
         String result = cvParserTool.parseCandidateCv(2L);
@@ -146,7 +151,6 @@ class CvParserToolTest {
         // LLM returned no structured fields — tool saves with defaults and reports success
         assertThat(result).contains("Bob Smith");
         verify(candidateRepository).save(candidate);
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.CV_REVIEWED);
         assertThat(candidate.getExperienceYears()).isEqualTo(0); // defaulted from null
     }
 

@@ -1,12 +1,10 @@
 package com.hr.agent.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.hr.agent.entity.Candidate;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Interview;
-import com.hr.agent.entity.JobPosting;
-import com.hr.agent.repository.CandidateRepository;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.InterviewRepository;
-import com.hr.agent.repository.JobPostingRepository;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,25 +23,21 @@ import java.util.stream.Collectors;
 public class SchedulerTool {
 
     private final InterviewRepository interviewRepository;
-    private final CandidateRepository candidateRepository;
-    private final JobPostingRepository jobPostingRepository;
+    private final ApplicationRepository applicationRepository;
     private final ObjectMapper objectMapper;
     private final ToolResultContext toolResultContext;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    @Tool("Schedule an interview for a candidate. " +
-          "Input: candidateId (Long), jobId (Long), scheduledAt (String: 'yyyy-MM-dd HH:mm'), " +
+    @Tool("Schedule an interview for a candidate application. " +
+          "Input: applicationId (Long), scheduledAt (String: 'yyyy-MM-dd HH:mm'), " +
           "interviewType (String: TECHNICAL|HR|FINAL), interviewerName (String).")
-    public String scheduleInterview(Long candidateId, Long jobId,
-                                    String scheduledAt, String interviewType,
-                                    String interviewerName) {
-        log.info("Scheduling interview for candidateId={} jobId={} at={}", candidateId, jobId, scheduledAt);
+    public String scheduleInterview(Long applicationId, String scheduledAt,
+                                    String interviewType, String interviewerName) {
+        log.info("Scheduling interview for applicationId={} at={}", applicationId, scheduledAt);
 
-        Candidate candidate = candidateRepository.findById(candidateId)
-                .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + candidateId));
-        JobPosting job = jobPostingRepository.findById(jobId)
-                .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
+        Application application = applicationRepository.findByIdWithDetails(applicationId)
+                .orElseThrow(() -> new IllegalArgumentException("Application not found: " + applicationId));
 
         LocalDateTime dateTime;
         try {
@@ -59,8 +53,7 @@ public class SchedulerTool {
         }
 
         Interview interview = Interview.builder()
-                .candidate(candidate)
-                .jobPosting(job)
+                .application(application)
                 .scheduledAt(dateTime)
                 .interviewType(interviewType != null ? interviewType : "TECHNICAL")
                 .interviewerName(interviewerName)
@@ -70,18 +63,19 @@ public class SchedulerTool {
 
         interviewRepository.save(interview);
 
-        candidate.setStatus(Candidate.CandidateStatus.INTERVIEW_SCHEDULED);
-        candidateRepository.save(candidate);
+        application.setStatus(Application.ApplicationStatus.INTERVIEW_SCHEDULED);
+        applicationRepository.save(application);
 
         log.info("Interview scheduled: interviewId={}", interview.getId());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", "interview_scheduled");
         result.put("interview_id", interview.getId());
-        result.put("candidate_id", candidateId);
-        result.put("candidate_name", candidate.getFullName());
-        result.put("job_id", jobId);
-        result.put("job_title", job.getTitle());
+        result.put("application_id", applicationId);
+        result.put("candidate_id", application.getCandidate().getId());
+        result.put("candidate_name", application.getCandidate().getFullName());
+        result.put("job_id", application.getJobPosting().getId());
+        result.put("job_title", application.getJobPosting().getTitle());
         result.put("scheduled_at", scheduledAt);
         result.put("interview_type", interviewType);
         result.put("interviewer", interviewerName);
@@ -107,11 +101,12 @@ public class SchedulerTool {
         interview.setNotes("Cancelled: " + reason);
         interviewRepository.save(interview);
 
-        Candidate candidate = interview.getCandidate();
-        candidate.setStatus(Candidate.CandidateStatus.SHORTLISTED);
-        candidateRepository.save(candidate);
+        Application application = interview.getApplication();
+        application.setStatus(Application.ApplicationStatus.SHORTLISTED);
+        applicationRepository.save(application);
 
-        return "Interview " + interviewId + " cancelled for " + candidate.getFullName() + ". Reason: " + reason;
+        return "Interview " + interviewId + " cancelled for "
+                + application.getCandidate().getFullName() + ". Reason: " + reason;
     }
 
     @Tool("Get all interviews for a specific candidate. Input: candidateId (Long).")
@@ -130,10 +125,11 @@ public class SchedulerTool {
     private Map<String, Object> interviewSummary(Interview i) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", i.getId());
-        m.put("candidate_id", i.getCandidate().getId());
-        m.put("candidate_name", i.getCandidate().getFullName());
-        m.put("job_id", i.getJobPosting().getId());
-        m.put("job_title", i.getJobPosting().getTitle());
+        m.put("application_id", i.getApplication().getId());
+        m.put("candidate_id", i.getApplication().getCandidate().getId());
+        m.put("candidate_name", i.getApplication().getCandidate().getFullName());
+        m.put("job_id", i.getApplication().getJobPosting().getId());
+        m.put("job_title", i.getApplication().getJobPosting().getTitle());
         m.put("scheduled_at", i.getScheduledAt().format(FMT));
         m.put("interview_type", i.getInterviewType());
         m.put("interviewer", i.getInterviewerName());
