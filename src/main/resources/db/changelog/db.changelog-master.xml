@@ -11,7 +11,7 @@
         Assumes a completely empty schema with no prior objects.
     -->
 
-    <include file="db/changelog/changes/v2.0.0-create-sequences.xml"/>
+    <include file="db/changelog/changes/v2.0.0-create-sequences.xml"/> 
     <include file="db/changelog/changes/v2.0.1-create-job-posting.xml"/>
     <include file="db/changelog/changes/v2.0.2-create-candidate.xml"/>
     <include file="db/changelog/changes/v2.0.3-create-application.xml"/>

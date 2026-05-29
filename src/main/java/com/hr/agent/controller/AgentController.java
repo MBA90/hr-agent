@@ -141,6 +141,7 @@ public class AgentController {
             JobPosting job = jobPostingRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
 
+            // Save candidate first to obtain the generated ID 
             Candidate candidate = candidateRepository.findByEmail(email)
                     .orElseGet(() -> Candidate.builder()
                             .fullName(name)
@@ -166,10 +167,10 @@ public class AgentController {
             candidate.setCvFilePath("./cv-uploads/" + fileName);
             candidateRepository.save(candidate);
 
-            log.info("CV uploaded for candidate={} jobId={}", email, jobId);
+            log.info("CV uploaded for candidate={} cndRefNo={} jobId={}", email, candidate.getCndRefNo(), jobId);
             return ResponseEntity.ok(
-                "CV uploaded successfully. Candidate ID: " + candidate.getId() +
-                ". Use the chat to parse and score this candidate."
+                "CV uploaded successfully. Candidate Reference: " + candidate.getCndRefNo() +
+                " (ID: " + candidate.getId() + "). Use the chat to parse and score this candidate."
             );
 
         } catch (Exception e) {

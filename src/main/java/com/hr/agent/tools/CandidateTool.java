@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class CandidateTool {
 
-    private final CandidateRepository candidateRepository;
+    private final CandidateRepository candidateRepository; 
     private final ApplicationRepository applicationRepository;
     private final JobPostingRepository jobPostingRepository;
     private final ObjectMapper objectMapper;
@@ -169,6 +169,7 @@ public class CandidateTool {
     private Map<String, Object> candidateDetail(Candidate c) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", c.getId());
+        m.put("cnd_ref_no", c.getCndRefNo());
         m.put("name", c.getFullName());
         m.put("email", c.getEmail());
         m.put("phone", c.getPhone());
