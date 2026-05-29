@@ -18,12 +18,8 @@ public class Interview {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "CANDIDATE_ID", nullable = false)
-    private Candidate candidate;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "JOB_POSTING_ID", nullable = false)
-    private JobPosting jobPosting;
+    @JoinColumn(name = "APPLICATION_ID", nullable = false)
+    private Application application;
 
     @Column(name = "SCHEDULED_AT", nullable = false)
     private LocalDateTime scheduledAt;

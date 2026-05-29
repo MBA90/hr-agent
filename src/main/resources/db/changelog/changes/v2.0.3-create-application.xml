@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.3 — APPLICATION table
+        Junction between CANDIDATE and JOB_POSTING.
+        Carries all per-application lifecycle data: status, score, applied_at.
+        A candidate may not apply to the same job twice (UQ_APP_CANDIDATE_JOB).
+        Author : hr-dev
+    -->
+
+    <changeSet id="v2.0.3-create-application" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="APPLICATION"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE APPLICATION (
+                ID               NUMBER          CONSTRAINT PK_APPLICATION         PRIMARY KEY,
+                APP_REF_NO       VARCHAR2(20)    CONSTRAINT NN_APP_REF_NO          NOT NULL,
+                CANDIDATE_ID     NUMBER          CONSTRAINT NN_APP_CAND_ID         NOT NULL,
+                JOB_POSTING_ID   NUMBER          CONSTRAINT NN_APP_JOB_ID          NOT NULL,
+                STATUS           VARCHAR2(30)    DEFAULT 'APPLIED'
+                                                 CONSTRAINT NN_APP_STATUS          NOT NULL,
+                SCORE            NUMBER(5,2),
+                SCORE_REASON     VARCHAR2(2000),
+                APPLIED_AT       TIMESTAMP       DEFAULT SYSTIMESTAMP
+                                                 CONSTRAINT NN_APP_APPLIED_AT      NOT NULL,
+                UPDATED_AT       TIMESTAMP       DEFAULT SYSTIMESTAMP,
+                CONSTRAINT UQ_APP_REF_NO        UNIQUE (APP_REF_NO),
+                CONSTRAINT UQ_APP_CANDIDATE_JOB UNIQUE (CANDIDATE_ID, JOB_POSTING_ID),
+                CONSTRAINT FK_APP_CANDIDATE     FOREIGN KEY (CANDIDATE_ID)
+                    REFERENCES CANDIDATE (ID) ON DELETE CASCADE,
+                CONSTRAINT FK_APP_JOB_POSTING   FOREIGN KEY (JOB_POSTING_ID)
+                    REFERENCES JOB_POSTING (ID) ON DELETE CASCADE,
+                CONSTRAINT CHK_APP_STATUS CHECK (STATUS IN (
+                    'APPLIED','CV_REVIEWED','SHORTLISTED',
+                    'INTERVIEW_SCHEDULED','INTERVIEW_DONE',
+                    'OFFER_SENT','HIRED','REJECTED'))
+            )
+        </sql>
+
+        <sql>CREATE INDEX IDX_APP_JOB_POSTING ON APPLICATION (JOB_POSTING_ID)</sql>
+        <sql>CREATE INDEX IDX_APP_SCORE       ON APPLICATION (SCORE DESC)</sql>
+
+        <rollback>
+            <sql>DROP TABLE APPLICATION CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -2,12 +2,12 @@ package com.hr.agent.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.Interview;
 import com.hr.agent.entity.JobPosting;
-import com.hr.agent.repository.CandidateRepository;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.InterviewRepository;
-import com.hr.agent.repository.JobPostingRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,8 +28,7 @@ import static org.mockito.Mockito.*;
 class SchedulerToolTest {
 
     @Mock InterviewRepository interviewRepository;
-    @Mock CandidateRepository candidateRepository;
-    @Mock JobPostingRepository jobPostingRepository;
+    @Mock ApplicationRepository applicationRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ToolResultContext toolResultContext = new ToolResultContext();
@@ -38,8 +37,7 @@ class SchedulerToolTest {
     @BeforeEach
     void setUp() {
         schedulerTool = new SchedulerTool(
-                interviewRepository, candidateRepository, jobPostingRepository,
-                objectMapper, toolResultContext);
+                interviewRepository, applicationRepository, objectMapper, toolResultContext);
     }
 
     @AfterEach
@@ -51,10 +49,8 @@ class SchedulerToolTest {
 
     @Test
     void scheduleInterview_savesInterviewAndUpdatesStatus() throws Exception {
-        Candidate candidate = candidate(1L, "Alice");
-        JobPosting job = job(1L, "Java Developer");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(1L, "Alice", "Java Developer");
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
         when(interviewRepository.existsConflict(any(), any())).thenReturn(false);
         when(interviewRepository.save(any())).thenAnswer(inv -> {
             Interview i = inv.getArgument(0);
@@ -63,7 +59,7 @@ class SchedulerToolTest {
         });
 
         String result = schedulerTool.scheduleInterview(
-                1L, 1L, "2026-06-15 10:00", "TECHNICAL", "John Smith");
+                1L, "2026-06-15 10:00", "TECHNICAL", "John Smith");
 
         JsonNode json = objectMapper.readTree(result);
         assertThat(json.get("type").asText()).isEqualTo("interview_scheduled");
@@ -72,21 +68,19 @@ class SchedulerToolTest {
         assertThat(json.get("interview_type").asText()).isEqualTo("TECHNICAL");
         assertThat(json.get("interviewer").asText()).isEqualTo("John Smith");
 
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.INTERVIEW_SCHEDULED);
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.INTERVIEW_SCHEDULED);
         verify(interviewRepository).save(any(Interview.class));
-        verify(candidateRepository).save(candidate);
+        verify(applicationRepository).save(app);
     }
 
     @Test
     void scheduleInterview_savesInterviewWithCorrectDateTime() {
-        Candidate candidate = candidate(1L, "Alice");
-        JobPosting job = job(1L, "Java Developer");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
+        Application app = application(1L, "Alice", "Java Developer");
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
         when(interviewRepository.existsConflict(any(), any())).thenReturn(false);
         when(interviewRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        schedulerTool.scheduleInterview(1L, 1L, "2026-06-15 14:30", "HR", "Jane Doe");
+        schedulerTool.scheduleInterview(1L, "2026-06-15 14:30", "HR", "Jane Doe");
 
         ArgumentCaptor<Interview> captor = ArgumentCaptor.forClass(Interview.class);
         verify(interviewRepository).save(captor.capture());
@@ -96,12 +90,12 @@ class SchedulerToolTest {
 
     @Test
     void scheduleInterview_returnsConflictMessageWhenSlotTaken() {
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate(1L, "Alice")));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job(1L, "Java Developer")));
+        Application app = application(1L, "Alice", "Java Developer");
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
         when(interviewRepository.existsConflict(any(), any())).thenReturn(true);
 
         String result = schedulerTool.scheduleInterview(
-                1L, 1L, "2026-06-15 10:00", "TECHNICAL", "John");
+                1L, "2026-06-15 10:00", "TECHNICAL", "John");
 
         assertThat(result).contains("conflict");
         verify(interviewRepository, never()).save(any());
@@ -109,11 +103,11 @@ class SchedulerToolTest {
 
     @Test
     void scheduleInterview_returnsErrorForInvalidDateFormat() {
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate(1L, "Alice")));
-        when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job(1L, "Java Developer")));
+        Application app = application(1L, "Alice", "Java Developer");
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
 
         String result = schedulerTool.scheduleInterview(
-                1L, 1L, "15/06/2026", "TECHNICAL", "John");
+                1L, "15/06/2026", "TECHNICAL", "John");
 
         assertThat(result).contains("Invalid date format");
         verify(interviewRepository, never()).save(any());
@@ -151,18 +145,18 @@ class SchedulerToolTest {
     @Test
     void cancelInterview_cancelsAndRevertsStatusToShortlisted() {
         Interview interview = interview(1L, "Alice", "Java Developer", "2026-06-15 10:00");
-        Candidate candidate = interview.getCandidate();
-        candidate.setStatus(Candidate.CandidateStatus.INTERVIEW_SCHEDULED);
+        Application app = interview.getApplication();
+        app.setStatus(Application.ApplicationStatus.INTERVIEW_SCHEDULED);
         when(interviewRepository.findByIdWithAssociations(1L)).thenReturn(Optional.of(interview));
 
         String result = schedulerTool.cancelInterview(1L, "Candidate withdrew");
 
         assertThat(interview.getStatus()).isEqualTo(Interview.InterviewStatus.CANCELLED);
         assertThat(interview.getNotes()).contains("Candidate withdrew");
-        assertThat(candidate.getStatus()).isEqualTo(Candidate.CandidateStatus.SHORTLISTED);
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.SHORTLISTED);
         assertThat(result).contains("cancelled");
         verify(interviewRepository).save(interview);
-        verify(candidateRepository).save(candidate);
+        verify(applicationRepository).save(app);
     }
 
     // ── getCandidateInterviews ────────────────────────────────────────────────
@@ -193,27 +187,29 @@ class SchedulerToolTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Candidate candidate(Long id, String name) {
+    private Application application(Long id, String candidateName, String jobTitle) {
         Candidate c = new Candidate();
         c.setId(id);
-        c.setFullName(name);
-        c.setEmail(name.toLowerCase() + "@example.com");
-        c.setStatus(Candidate.CandidateStatus.SHORTLISTED);
-        return c;
-    }
+        c.setFullName(candidateName);
+        c.setEmail(candidateName.toLowerCase() + "@example.com");
 
-    private JobPosting job(Long id, String title) {
         JobPosting j = new JobPosting();
         j.setId(id);
-        j.setTitle(title);
-        return j;
+        j.setTitle(jobTitle);
+
+        Application a = new Application();
+        a.setId(id);
+        a.setCandidate(c);
+        a.setJobPosting(j);
+        a.setStatus(Application.ApplicationStatus.SHORTLISTED);
+        return a;
     }
 
     private Interview interview(Long id, String candidateName, String jobTitle, String dateStr) {
+        Application app = application(id, candidateName, jobTitle);
         Interview i = new Interview();
         i.setId(id);
-        i.setCandidate(candidate(id, candidateName));
-        i.setJobPosting(job(id, jobTitle));
+        i.setApplication(app);
         i.setScheduledAt(LocalDateTime.parse(dateStr,
                 java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")));
         i.setInterviewType("TECHNICAL");

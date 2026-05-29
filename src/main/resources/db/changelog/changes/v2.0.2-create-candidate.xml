@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.2 — CANDIDATE table
+        Stores candidate identity and CV data only.
+        Application lifecycle data (status, score, applied_at) lives in APPLICATION.
+        Author : hr-dev
+    -->
+
+    <changeSet id="v2.0.2-create-candidate" author="hr-dev" dbms="oracle">
+        <validCheckSum>ANY</validCheckSum>
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="CANDIDATE"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE CANDIDATE (
+                ID               NUMBER          CONSTRAINT PK_CANDIDATE          PRIMARY KEY,
+                CND_REF_NO       VARCHAR2(20)    CONSTRAINT NN_CND_REF_NO NOT NULL
+                                                CONSTRAINT UQ_CND_REF_NO UNIQUE,
+                FULL_NAME        VARCHAR2(200)   CONSTRAINT NN_CND_FULL_NAME      NOT NULL,
+                EMAIL            VARCHAR2(200)   CONSTRAINT NN_CND_EMAIL          NOT NULL,
+                PHONE            VARCHAR2(20),
+                NATIONALITY      VARCHAR2(100),
+                CV_FILE_PATH     VARCHAR2(500),
+                SKILLS           VARCHAR2(2000),
+                EXPERIENCE_YEARS NUMBER(3),
+                EDUCATION        VARCHAR2(500),
+                CURRENT_ROLE     VARCHAR2(200),
+                UPDATED_AT       TIMESTAMP       DEFAULT SYSTIMESTAMP,
+                CONSTRAINT UQ_CND_EMAIL UNIQUE (EMAIL)
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE CANDIDATE CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

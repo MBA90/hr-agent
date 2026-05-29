@@ -2,7 +2,6 @@ package com.hr.agent.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
@@ -19,6 +18,16 @@ public class Candidate {
     @Column(name = "ID")
     private Long id;
 
+    @Column(name = "CND_REF_NO", nullable = false, unique = true, length = 20)
+    private String cndRefNo;
+
+    @PrePersist
+    private void assignCndRefNo() {
+        if (cndRefNo == null && id != null) {
+            cndRefNo = "CND_" + id;
+        }
+    }
+
     @Column(name = "FULL_NAME", nullable = false, length = 200)
     private String fullName;
 
@@ -30,16 +39,6 @@ public class Candidate {
 
     @Column(name = "NATIONALITY", length = 100)
     private String nationality;
-
-    @Column(name = "REFERENCE_NO", nullable = false, unique = true, length = 20)
-    private String referenceNo;
-
-    @PrePersist
-    private void assignReferenceNo() {
-        if (referenceNo == null && id != null) {
-            referenceNo = "CND_" + id;
-        }
-    }
 
     @Column(name = "CV_FILE_PATH", length = 500)
     private String cvFilePath;
@@ -56,35 +55,10 @@ public class Candidate {
     @Column(name = "CURRENT_ROLE", length = 200)
     private String currentRole;
 
-    @Column(name = "SCORE")
-    private Double score;
-
-    @Column(name = "SCORE_REASON", length = 2000)
-    private String scoreReason;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "STATUS", length = 30)
-    @Builder.Default
-    private CandidateStatus status = CandidateStatus.APPLIED;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "JOB_POSTING_ID")
-    private JobPosting jobPosting;
-
-    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Interview> interviews;
-
-    @CreationTimestamp
-    @Column(name = "APPLIED_AT", updatable = false)
-    private LocalDateTime appliedAt;
-
     @UpdateTimestamp
     @Column(name = "UPDATED_AT")
     private LocalDateTime updatedAt;
 
-    public enum CandidateStatus {
-        APPLIED, CV_REVIEWED, SHORTLISTED,
-        INTERVIEW_SCHEDULED, INTERVIEW_DONE,
-        OFFER_SENT, HIRED, REJECTED
-    }
+    @OneToMany(mappedBy = "candidate", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Application> applications;
 }

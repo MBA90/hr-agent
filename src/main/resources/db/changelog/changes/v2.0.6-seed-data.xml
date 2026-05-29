@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.6 — Seed data
+        Author : hr-dev
+    -->
+
+    <!-- ── Job Postings (prod + dev) ─────────────────────────────────────── -->
+
+    <changeSet id="v2.0.6-seed-job-postings" author="hr-dev" dbms="oracle" context="dev,prod">
+
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM JOB_POSTING</sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO JOB_POSTING (ID, TITLE, DEPARTMENT, DESCRIPTION, REQUIRED_SKILLS, EXPERIENCE_YEARS, LOCATION, SALARY_MIN, SALARY_MAX, STATUS)
+            VALUES (SEQ_JOB_POSTING.NEXTVAL,
+                    'Senior Java Developer', 'Engineering',
+                    'We are looking for a Senior Java Developer to join our growing backend team and build scalable microservices.',
+                    'Java, Spring Boot, Oracle, Microservices, REST APIs, Docker',
+                    5, 'Dubai, UAE', 20000, 30000, 'OPEN')
+        </sql>
+
+        <sql>
+            INSERT INTO JOB_POSTING (ID, TITLE, DEPARTMENT, DESCRIPTION, REQUIRED_SKILLS, EXPERIENCE_YEARS, LOCATION, SALARY_MIN, SALARY_MAX, STATUS)
+            VALUES (SEQ_JOB_POSTING.NEXTVAL,
+                    'HR Business Partner', 'Human Resources',
+                    'Experienced HR partner to lead talent acquisition and people strategy across departments.',
+                    'Recruitment, HR Policies, HRIS, Oracle HCM, Communication',
+                    3, 'Abu Dhabi, UAE', 15000, 22000, 'OPEN')
+        </sql>
+
+        <sql>
+            INSERT INTO JOB_POSTING (ID, TITLE, DEPARTMENT, DESCRIPTION, REQUIRED_SKILLS, EXPERIENCE_YEARS, LOCATION, SALARY_MIN, SALARY_MAX, STATUS)
+            VALUES (SEQ_JOB_POSTING.NEXTVAL,
+                    'DevOps Engineer', 'Engineering',
+                    'Build and maintain CI/CD pipelines, Kubernetes clusters, and cloud infrastructure.',
+                    'Kubernetes, Docker, Jenkins, AWS, Terraform, Linux',
+                    4, 'Dubai, UAE', 18000, 26000, 'OPEN')
+        </sql>
+
+        <rollback>
+            <sql>DELETE FROM JOB_POSTING</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── Sample Candidates and Applications (dev only) ─────────────────── -->
+
+    <changeSet id="v2.0.6-seed-candidates" author="hr-dev" dbms="oracle" context="dev">
+        <validCheckSum>ANY</validCheckSum>
+
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM CANDIDATE</sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO CANDIDATE (ID, CND_REF_NO, FULL_NAME, EMAIL, PHONE, NATIONALITY, SKILLS, EXPERIENCE_YEARS, EDUCATION, CURRENT_ROLE)
+            VALUES (SEQ_CANDIDATE.NEXTVAL, 'CND_' || SEQ_CANDIDATE.CURRVAL,
+                    'Ahmed Al-Rashid', 'ahmed.rashid@example.com', '+971501234567', 'UAE',
+                    'Java, Spring Boot, Oracle, REST APIs, Docker',
+                    6, 'BSc Computer Science, UAE University', 'Backend Developer at TechCorp')
+        </sql>
+
+        <sql>
+            INSERT INTO CANDIDATE (ID, CND_REF_NO, FULL_NAME, EMAIL, PHONE, NATIONALITY, SKILLS, EXPERIENCE_YEARS, EDUCATION, CURRENT_ROLE)
+            VALUES (SEQ_CANDIDATE.NEXTVAL, 'CND_' || SEQ_CANDIDATE.CURRVAL,
+                    'Sara Al-Mansoori', 'sara.mansoori@example.com', '+971509876543', 'UAE',
+                    'Recruitment, HR Policies, Oracle HCM, HRIS',
+                    4, 'BA Human Resources, Zayed University', 'HR Specialist at GlobalCo')
+        </sql>
+
+        <rollback>
+            <sql>DELETE FROM CANDIDATE</sql>
+        </rollback>
+
+    </changeSet>
+
+    <changeSet id="v2.0.6-seed-applications" author="hr-dev" dbms="oracle" context="dev">
+
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM APPLICATION</sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO APPLICATION (ID, APP_REF_NO, CANDIDATE_ID, JOB_POSTING_ID, STATUS, APPLIED_AT)
+            VALUES (SEQ_APPLICATION.NEXTVAL, 'APP_' || SEQ_APPLICATION.CURRVAL,
+                    (SELECT ID FROM CANDIDATE    WHERE EMAIL = 'ahmed.rashid@example.com'),
+                    (SELECT ID FROM JOB_POSTING  WHERE TITLE = 'Senior Java Developer'),
+                    'APPLIED', SYSTIMESTAMP)
+        </sql>
+
+        <sql>
+            INSERT INTO APPLICATION (ID, APP_REF_NO, CANDIDATE_ID, JOB_POSTING_ID, STATUS, APPLIED_AT)
+            VALUES (SEQ_APPLICATION.NEXTVAL, 'APP_' || SEQ_APPLICATION.CURRVAL,
+                    (SELECT ID FROM CANDIDATE    WHERE EMAIL = 'sara.mansoori@example.com'),
+                    (SELECT ID FROM JOB_POSTING  WHERE TITLE = 'HR Business Partner'),
+                    'APPLIED', SYSTIMESTAMP)
+        </sql>
+
+        <rollback>
+            <sql>DELETE FROM APPLICATION</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── Roles (prod + dev) ────────────────────────────────────────────── -->
+
+    <changeSet id="v2.0.6-seed-roles" author="hr-dev" dbms="oracle" context="dev,prod">
+
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM APP_ROLE</sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO APP_ROLE (ID, NAME, DESCRIPTION)
+            VALUES (SEQ_APP_ROLE.NEXTVAL, 'ROLE_ADMIN', 'Full system access')
+        </sql>
+
+        <sql>
+            INSERT INTO APP_ROLE (ID, NAME, DESCRIPTION)
+            VALUES (SEQ_APP_ROLE.NEXTVAL, 'ROLE_RECRUITER', 'HR recruiter access')
+        </sql>
+
+        <rollback>
+            <sql>DELETE FROM APP_ROLE WHERE NAME IN ('ROLE_ADMIN', 'ROLE_RECRUITER')</sql>
+        </rollback>
+
+    </changeSet>
+
+    <!-- ── Default admin user (prod + dev) ──────────────────────────────── -->
+
+    <changeSet id="v2.0.6-seed-admin-user" author="hr-dev" dbms="oracle" context="dev,prod">
+        <!-- BCrypt hash of: Admin@1234 -->
+
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(*) FROM APP_USER WHERE USERNAME = 'admin'</sqlCheck>
+        </preConditions>
+
+        <sql>
+            INSERT INTO APP_USER (ID, USERNAME, EMAIL, PASSWORD_HASH, FULL_NAME, ENABLED, CREATED_AT)
+            VALUES (SEQ_APP_USER.NEXTVAL,
+                    'admin', 'admin@hr-agent.com',
+                    '$2a$12$TwjWoMPTQoJFKl/GhvXo4.bxIXwsmhHCjSvVuwrHhB3SWbPsFW1Dq',
+                    'System Administrator', 1, SYSTIMESTAMP)
+        </sql>
+
+        <sql>
+            INSERT INTO USER_ROLE (USER_ID, ROLE_ID)
+            SELECT u.ID, r.ID
+            FROM   APP_USER  u
+                   CROSS JOIN APP_ROLE r
+            WHERE  u.USERNAME = 'admin'
+            AND    r.NAME     = 'ROLE_ADMIN'
+        </sql>
+
+        <rollback>
+            <sql>DELETE FROM APP_USER WHERE USERNAME = 'admin'</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

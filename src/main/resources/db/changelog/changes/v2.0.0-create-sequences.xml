@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.0 — All application sequences
+        Uses EXECUTE IMMEDIATE with ORA-00955 guard so it is safe to run
+        on a partially-initialised schema without failing on existing objects.
+        Author : hr-dev
+    -->
+
+    <changeSet id="v2.0.0-create-sequences" author="hr-dev" dbms="oracle">
+
+        <sql splitStatements="false">
+            DECLARE
+                PROCEDURE create_seq (p_name IN VARCHAR2) IS
+                BEGIN
+                    EXECUTE IMMEDIATE
+                        'CREATE SEQUENCE ' || p_name
+                        || ' START WITH 1 INCREMENT BY 1 MINVALUE 1 NOCYCLE ORDER';
+                EXCEPTION
+                    WHEN OTHERS THEN
+                        IF SQLCODE != -955 THEN RAISE; END IF;
+                END;
+            BEGIN
+                create_seq('SEQ_JOB_POSTING');
+                create_seq('SEQ_CANDIDATE');
+                create_seq('SEQ_APPLICATION');
+                create_seq('SEQ_INTERVIEW');
+                create_seq('SEQ_APP_ROLE');
+                create_seq('SEQ_APP_USER');
+                create_seq('SEQ_PASSWORD_RESET_TOKEN');
+            END;
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DECLARE
+                    PROCEDURE drop_seq (p_name IN VARCHAR2) IS
+                    BEGIN
+                        EXECUTE IMMEDIATE 'DROP SEQUENCE ' || p_name;
+                    EXCEPTION
+                        WHEN OTHERS THEN
+                            IF SQLCODE != -2289 THEN RAISE; END IF;
+                    END;
+                BEGIN
+                    drop_seq('SEQ_PASSWORD_RESET_TOKEN');
+                    drop_seq('SEQ_APP_USER');
+                    drop_seq('SEQ_APP_ROLE');
+                    drop_seq('SEQ_INTERVIEW');
+                    drop_seq('SEQ_APPLICATION');
+                    drop_seq('SEQ_CANDIDATE');
+                    drop_seq('SEQ_JOB_POSTING');
+                END;
+            </sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -2,8 +2,10 @@ package com.hr.agent.tools;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
 import com.hr.agent.entity.JobPosting;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -24,6 +26,7 @@ import static org.mockito.Mockito.*;
 class CandidateToolTest {
 
     @Mock CandidateRepository candidateRepository;
+    @Mock ApplicationRepository applicationRepository;
     @Mock JobPostingRepository jobPostingRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -33,13 +36,14 @@ class CandidateToolTest {
     @BeforeEach
     void setUp() {
         candidateTool = new CandidateTool(
-                candidateRepository, jobPostingRepository, objectMapper, toolResultContext);
+                candidateRepository, applicationRepository, jobPostingRepository,
+                objectMapper, toolResultContext);
         ReflectionTestUtils.setField(candidateTool, "minScoreThreshold", 60.0);
     }
 
     @AfterEach
     void tearDown() {
-        toolResultContext.retrieve(); // clear ThreadLocal between tests
+        toolResultContext.retrieve();
     }
 
     // ── listOpenJobs ──────────────────────────────────────────────────────────
@@ -103,34 +107,34 @@ class CandidateToolTest {
 
     @Test
     void getTopCandidates_usesDefaultThresholdWhenMinScoreNull() throws Exception {
-        Candidate c = candidate(1L, "Alice", 85.0, Candidate.CandidateStatus.SHORTLISTED);
-        when(candidateRepository.findTopCandidates(1L, 60.0)).thenReturn(List.of(c));
+        Application app = application(1L, "Alice", 85.0, Application.ApplicationStatus.SHORTLISTED);
+        when(applicationRepository.findTopApplications(1L, 60.0)).thenReturn(List.of(app));
 
         String result = candidateTool.getTopCandidates(1L, null);
 
         JsonNode json = objectMapper.readTree(result);
         assertThat(json.get("count").asInt()).isEqualTo(1);
         assertThat(json.get("candidates").get(0).get("score").asDouble()).isEqualTo(85.0);
-        verify(candidateRepository).findTopCandidates(1L, 60.0);
+        verify(applicationRepository).findTopApplications(1L, 60.0);
     }
 
     @Test
     void getTopCandidates_usesProvidedMinScore() {
-        when(candidateRepository.findTopCandidates(1L, 75.0)).thenReturn(List.of());
+        when(applicationRepository.findTopApplications(1L, 75.0)).thenReturn(List.of());
 
         candidateTool.getTopCandidates(1L, 75.0);
 
-        verify(candidateRepository).findTopCandidates(1L, 75.0);
+        verify(applicationRepository).findTopApplications(1L, 75.0);
     }
 
     // ── getCandidatesByJob ────────────────────────────────────────────────────
 
     @Test
     void getCandidatesByJob_returnsAllCandidates() throws Exception {
-        List<Candidate> candidates = List.of(
-                candidate(1L, "Alice", 85.0, Candidate.CandidateStatus.SHORTLISTED),
-                candidate(2L, "Bob", null, Candidate.CandidateStatus.APPLIED));
-        when(candidateRepository.findByJobPostingId(1L)).thenReturn(candidates);
+        List<Application> apps = List.of(
+                application(1L, "Alice", 85.0, Application.ApplicationStatus.SHORTLISTED),
+                application(2L, "Bob", null, Application.ApplicationStatus.APPLIED));
+        when(applicationRepository.findByJobPostingIdWithDetails(1L)).thenReturn(apps);
 
         String result = candidateTool.getCandidatesByJob(1L);
 
@@ -144,13 +148,12 @@ class CandidateToolTest {
 
     @Test
     void getCandidateDetails_returnsCandidateWithAllFields() throws Exception {
-        Candidate c = candidate(1L, "Alice", 88.0, Candidate.CandidateStatus.SHORTLISTED);
+        Candidate c = candidate(1L, "Alice");
         c.setEmail("alice@example.com");
         c.setSkills("Java, Spring Boot");
         c.setExperienceYears(6);
         c.setEducation("BSc Computer Science");
         c.setCurrentRole("Senior Developer");
-        c.setScoreReason("Strong match");
         when(candidateRepository.findById(1L)).thenReturn(Optional.of(c));
 
         String result = candidateTool.getCandidateDetails(1L);
@@ -160,8 +163,6 @@ class CandidateToolTest {
         assertThat(cd.get("name").asText()).isEqualTo("Alice");
         assertThat(cd.get("skills").asText()).isEqualTo("Java, Spring Boot");
         assertThat(cd.get("experience_years").asInt()).isEqualTo(6);
-        assertThat(cd.get("score_reason").asText()).isEqualTo("Strong match");
-        assertThat(cd.get("status").asText()).isEqualTo("SHORTLISTED");
     }
 
     @Test
@@ -174,36 +175,36 @@ class CandidateToolTest {
         assertThat(json.get("type").asText()).isEqualTo("error");
     }
 
-    // ── updateCandidateStatus ─────────────────────────────────────────────────
+    // ── updateApplicationStatus ───────────────────────────────────────────────
 
     @Test
-    void updateCandidateStatus_updatesAndSaves() {
-        Candidate c = candidate(1L, "Alice", 85.0, Candidate.CandidateStatus.SHORTLISTED);
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(c));
+    void updateApplicationStatus_updatesAndSaves() {
+        Application app = application(1L, "Alice", 85.0, Application.ApplicationStatus.SHORTLISTED);
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
 
-        String result = candidateTool.updateCandidateStatus(1L, "HIRED");
+        String result = candidateTool.updateApplicationStatus(1L, "HIRED");
 
-        assertThat(c.getStatus()).isEqualTo(Candidate.CandidateStatus.HIRED);
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.HIRED);
         assertThat(result).contains("HIRED");
-        verify(candidateRepository).save(c);
+        verify(applicationRepository).save(app);
     }
 
     @Test
-    void updateCandidateStatus_returnsErrorForInvalidStatus() {
-        Candidate c = candidate(1L, "Alice", 85.0, Candidate.CandidateStatus.SHORTLISTED);
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(c));
+    void updateApplicationStatus_returnsErrorForInvalidStatus() {
+        Application app = application(1L, "Alice", 85.0, Application.ApplicationStatus.SHORTLISTED);
+        when(applicationRepository.findByIdWithDetails(1L)).thenReturn(Optional.of(app));
 
-        String result = candidateTool.updateCandidateStatus(1L, "FLYING");
+        String result = candidateTool.updateApplicationStatus(1L, "FLYING");
 
         assertThat(result).contains("Invalid status");
-        verify(candidateRepository, never()).save(any());
+        verify(applicationRepository, never()).save(any());
     }
 
     // ── countApplicants ───────────────────────────────────────────────────────
 
     @Test
     void countApplicants_returnsCount() throws Exception {
-        when(candidateRepository.countByJobPostingId(1L)).thenReturn(7L);
+        when(applicationRepository.countByJobPostingId(1L)).thenReturn(7L);
 
         String result = candidateTool.countApplicants(1L);
 
@@ -214,14 +215,25 @@ class CandidateToolTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private Candidate candidate(Long id, String name, Double score, Candidate.CandidateStatus status) {
+    private Candidate candidate(Long id, String name) {
         Candidate c = new Candidate();
         c.setId(id);
         c.setFullName(name);
         c.setEmail(name.toLowerCase() + "@example.com");
-        c.setScore(score);
-        c.setStatus(status);
         return c;
+    }
+
+    private Application application(Long id, String candidateName, Double score,
+                                    Application.ApplicationStatus status) {
+        Candidate c = candidate(id, candidateName);
+        JobPosting j = jobPosting(1L, "Senior Java Developer", "Engineering", "Dubai");
+        Application a = new Application();
+        a.setId(id);
+        a.setCandidate(c);
+        a.setJobPosting(j);
+        a.setScore(score);
+        a.setStatus(status);
+        return a;
     }
 
     private JobPosting jobPosting(Long id, String title, String department, String location) {

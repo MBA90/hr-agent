@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.1 — JOB_POSTING table
+        Author : hr-dev
+    -->
+
+    <changeSet id="v2.0.1-create-job-posting" author="hr-dev" dbms="oracle">
+
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="JOB_POSTING"/></not>
+        </preConditions>
+
+        <sql>
+            CREATE TABLE JOB_POSTING (
+                ID               NUMBER                   CONSTRAINT PK_JOB_POSTING      PRIMARY KEY,
+                TITLE            VARCHAR2(200)            CONSTRAINT NN_JP_TITLE          NOT NULL,
+                DEPARTMENT       VARCHAR2(100),
+                DESCRIPTION      VARCHAR2(4000),
+                REQUIRED_SKILLS  VARCHAR2(2000)           CONSTRAINT NN_JP_REQ_SKILLS     NOT NULL,
+                EXPERIENCE_YEARS NUMBER(3),
+                LOCATION         VARCHAR2(100),
+                SALARY_MIN       NUMBER(10,2),
+                SALARY_MAX       NUMBER(10,2),
+                STATUS           VARCHAR2(20)  DEFAULT 'OPEN'
+                                               CONSTRAINT NN_JP_STATUS                   NOT NULL,
+                CREATED_AT       TIMESTAMP     DEFAULT SYSTIMESTAMP
+                                               CONSTRAINT NN_JP_CREATED_AT               NOT NULL,
+                UPDATED_AT       TIMESTAMP     DEFAULT SYSTIMESTAMP,
+                CONSTRAINT CHK_JP_STATUS CHECK (STATUS IN ('OPEN','CLOSED','ON_HOLD','FILLED'))
+            )
+        </sql>
+
+        <rollback>
+            <sql>DROP TABLE JOB_POSTING CASCADE CONSTRAINTS</sql>
+        </rollback>
+
+    </changeSet>
+
+</databaseChangeLog>

@@ -2,7 +2,7 @@ package com.hr.agent.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hr.agent.entity.JobPosting;
-import com.hr.agent.repository.CandidateRepository;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class JobPostingTool {
 
     private final JobPostingRepository jobPostingRepository;
-    private final CandidateRepository candidateRepository;
+    private final ApplicationRepository applicationRepository;
     private final ObjectMapper objectMapper;
     private final ToolResultContext toolResultContext;
 
@@ -154,7 +154,7 @@ public class JobPostingTool {
     public String deleteJobPosting(Long jobId) {
         JobPosting job = jobPostingRepository.findById(jobId)
                 .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
-        long candidateCount = candidateRepository.countByJobPostingId(jobId);
+        long candidateCount = applicationRepository.countByJobPostingId(jobId);
         if (candidateCount > 0) {
             return "{\"type\":\"error\",\"message\":\"Cannot delete job " + jobId
                     + " — it has " + candidateCount + " candidate(s). Close or fill it instead.\"}";

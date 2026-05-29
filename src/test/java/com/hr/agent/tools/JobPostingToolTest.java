@@ -3,7 +3,7 @@ package com.hr.agent.tools;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hr.agent.entity.JobPosting;
-import com.hr.agent.repository.CandidateRepository;
+import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.*;
 class JobPostingToolTest {
 
     @Mock JobPostingRepository jobPostingRepository;
-    @Mock CandidateRepository candidateRepository;
+    @Mock ApplicationRepository applicationRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ToolResultContext toolResultContext = new ToolResultContext();
@@ -33,7 +33,7 @@ class JobPostingToolTest {
     @BeforeEach
     void setUp() {
         jobPostingTool = new JobPostingTool(
-                jobPostingRepository, candidateRepository, objectMapper, toolResultContext);
+                jobPostingRepository, applicationRepository, objectMapper, toolResultContext);
     }
 
     @AfterEach
@@ -241,7 +241,7 @@ class JobPostingToolTest {
     void deleteJobPosting_deletesWhenNoCandidates() throws Exception {
         JobPosting job = jobPosting(1L, "Old Role", "IT", "Remote");
         when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
-        when(candidateRepository.countByJobPostingId(1L)).thenReturn(0L);
+        when(applicationRepository.countByJobPostingId(1L)).thenReturn(0L);
 
         String result = jobPostingTool.deleteJobPosting(1L);
 
@@ -256,7 +256,7 @@ class JobPostingToolTest {
     void deleteJobPosting_blockedWhenCandidatesExist() throws Exception {
         JobPosting job = jobPosting(1L, "Dev", "IT", "Remote");
         when(jobPostingRepository.findById(1L)).thenReturn(Optional.of(job));
-        when(candidateRepository.countByJobPostingId(1L)).thenReturn(3L);
+        when(applicationRepository.countByJobPostingId(1L)).thenReturn(3L);
 
         String result = jobPostingTool.deleteJobPosting(1L);
 
