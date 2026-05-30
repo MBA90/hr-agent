@@ -11,13 +11,14 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 | **JWT Authentication** | Stateless auth with signed JWTs (HS256, 24 h expiry); all agent endpoints require `Authorization: Bearer <token>` |
 | **Role-Based Access Control** | Two roles — `ROLE_ADMIN` and `ROLE_RECRUITER`; roles are embedded in the JWT and enforced per-request |
 | **Password Management** | Change password (authenticated), forgot/reset password via email token (60-min expiry) |
-| **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, and role |
+| **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, and role — stored as an immutable snapshot on the application, not the candidate |
 | **Candidate Scoring** | LLM scores each application against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
 | **Interview Scheduling** | Books interviews against an application ID with conflict detection, stores date/time/type/interviewer |
 | **Email Notifications** | Sends interview invitations, rejection emails, offer letters, and password-reset links via Gmail SMTP |
 | **Candidate Management** | Lists jobs and candidates, filters by score threshold, updates application statuses |
 | **Job Posting Management** | Create, update, close, delete, search, and get stats on job postings via natural language |
-| **Multi-Application Support** | One candidate can apply to multiple jobs simultaneously — each application tracks its own status, score, and timeline |
+| **Multi-Application Support** | One candidate can apply to multiple jobs simultaneously — each application carries its own CV version, parsed profile, status, score, and timeline |
+| **CV Integrity / Re-upload Guard** | CV uploads are versioned per-application (`APP_<id>_v<n>.pdf`, never overwritten). A CV can be replaced only while the application is still `APPLIED`; once reviewed (`CV_REVIEWED` or beyond) the application is locked and further uploads are rejected (`409 Conflict`) |
 | **JSON API** | All tool results returned as structured JSON for easy frontend consumption |
 
 ---
@@ -76,23 +77,31 @@ AuthResponse { token, tokenType, userId, username, email, fullName, roles }
 ---
 
 ## Database Schema
+
 ```
- ┌──────────────────────┐               ┌───────────────────────┐               ┌──────────────────────┐
- │      JOB_POSTING     │               │      APPLICATION      │               │      CANDIDATE       │
- ├──────────────────────┤               ├───────────────────────┤               ├──────────────────────┤
- │ PK  id               │  1        *   │ PK  id                │   *        1  │ PK  id               │
- │     title            │◄──────────────│ FK  job_posting_id    │───────────────│ UQ  cnd_ref_no       │
- │     department       │               │ FK  candidate_id      │──────────────►│     full_name        │
- │     description      │               │ UQ  app_ref_no        │               │ UQ  email            │
- │     required_skills  │               │     status            │               │     phone            │
- │     experience_years │               │     score             │               │     nationality      │
- │     location         │               │     score_reason      │               │     cv_file_path     │
- │     salary_min       │               │     applied_at        │               │     skills           │
- │     salary_max       │               │     updated_at        │               │     experience_years │
- │     status           │               └───────────┬───────────┘               │     education        │
- │     created_at       │                           │ 1                         │     current_role     │
- │     updated_at       │                           │                           │     updated_at       │
- └──────────────────────┘                           │ *                         └──────────────────────┘
+ ┌──────────────────────┐               ┌───────────────────────────┐               ┌─────────────────────┐
+ │      JOB_POSTING     │               │        APPLICATION        │               │      CANDIDATE      │
+ ├──────────────────────┤               ├───────────────────────────┤               ├─────────────────────┤
+ │ PK  id               │  1        *   │ PK  id                    │   *        1  │ PK  id              │
+ │     title            │◄──────────────│ FK  job_posting_id        │───────────────│ UQ  cnd_ref_no      │
+ │     department       │               │ FK  candidate_id          │──────────────►│     full_name       │
+ │     description      │               │ UQ  app_ref_no            │               │ UQ  email           │
+ │     required_skills  │               │ UQ  (candidate,job)       │               │     phone           │
+ │     experience_years │               │     status                │               │     updated_at      │
+ │     location         │               │     score                 │               └─────────────────────┘
+ │     salary_min       │               │     score_reason          │
+ │     salary_max       │               │     applied_at            │   ← CV snapshot (frozen at review) →
+ │     status           │               │     cv_file_path          │
+ │     created_at       │               │     cv_version            │
+ │     updated_at       │               │     nationality           │
+ └──────────────────────┘               │     skills                │
+                                        │     experience_years      │
+                                        │     education             │
+                                        │     current_role          │
+                                        │     updated_at            │
+                                        └───────────┬───────────────┘
+                                                    │ 1
+                                                    │ *
                                        ┌────────────▼────────────┐
                                        │        INTERVIEW        │
                                        ├─────────────────────────┤
@@ -243,7 +252,7 @@ A default admin account is seeded on first startup — username `admin`, passwor
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/agent/chat` | Yes | Send a natural-language message to the HR agent |
-| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (`file`, `jobId`, `name`, `email`, `phone`); file is saved as `CND_<id>.pdf` |
+| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (`file`, `jobId`, `name`, `email`, `phone`). File is stored as `APP_<id>_v<n>.pdf` (versioned, never overwritten). Allowed only while the application is `APPLIED` — returns `409 Conflict` if the application has already been reviewed. |
 | `GET`  | `/api/agent/health` | No | Health check |
 
 The chat endpoint accepts `{ "message": "..." }`. The agent routes the message to the appropriate tool automatically. The response includes a human-readable `message` from the LLM and a structured `data` payload.
@@ -267,7 +276,7 @@ The chat endpoint accepts `{ "message": "..." }`. The agent routes the message t
 ### CV Parsing & Scoring
 
 ```
-"Parse the CV of candidate 5"
+"Parse the CV of candidate 5 for job 1"
 "Score candidate 5 for job 1"
 "Score all unscored candidates for job 1"
 ```
@@ -373,5 +382,6 @@ src/main/resources/
         ├── v2.0.3-create-application.xml
         ├── v2.0.4-create-interview.xml
         ├── v2.0.5-create-auth.xml
-        └── v2.0.6-seed-data.xml
+        ├── v2.0.6-seed-data.xml
+        └── v2.0.7-application-cv-snapshot.xml
 ```
