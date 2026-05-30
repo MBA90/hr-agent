@@ -93,9 +93,7 @@ public class ScoringTool {
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private ScoringResult doScore(Application application) {
-        Candidate candidate = application.getCandidate();
-        JobPosting job = application.getJobPosting();
-        ScoringResult result = scoreWithLlm(candidate, job);
+        ScoringResult result = scoreWithLlm(application);
         application.setScore(result.getScore());
         application.setScoreReason(result.getReason());
         application.setStatus(result.isShortlisted(minScoreThreshold)
@@ -120,7 +118,9 @@ public class ScoringTool {
         return m;
     }
 
-    private ScoringResult scoreWithLlm(Candidate candidate, JobPosting job) {
+    private ScoringResult scoreWithLlm(Application application) {
+        Candidate candidate = application.getCandidate();
+        JobPosting job = application.getJobPosting();
         String prompt = String.format("""
             You are an expert HR recruiter. Score this candidate for the job below.
 
@@ -147,10 +147,10 @@ public class ScoringTool {
             job.getExperienceYears() != null ? job.getExperienceYears() : 0,
             job.getDescription(),
             candidate.getFullName(),
-            candidate.getSkills() != null ? candidate.getSkills() : "Not specified",
-            candidate.getExperienceYears() != null ? candidate.getExperienceYears() : 0,
-            candidate.getEducation() != null ? candidate.getEducation() : "Not specified",
-            candidate.getCurrentRole() != null ? candidate.getCurrentRole() : "Not specified"
+            application.getSkills() != null ? application.getSkills() : "Not specified",
+            application.getExperienceYears() != null ? application.getExperienceYears() : 0,
+            application.getEducation() != null ? application.getEducation() : "Not specified",
+            application.getCurrentRole() != null ? application.getCurrentRole() : "Not specified"
         );
 
         String response = ollamaChatModel.generate(prompt);

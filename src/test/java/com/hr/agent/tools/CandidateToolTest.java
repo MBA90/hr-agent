@@ -147,13 +147,16 @@ class CandidateToolTest {
     // ── getCandidateDetails ───────────────────────────────────────────────────
 
     @Test
-    void getCandidateDetails_returnsCandidateWithAllFields() throws Exception {
+    void getCandidateDetails_returnsIdentityWithPerApplicationProfile() throws Exception {
         Candidate c = candidate(1L, "Alice");
         c.setEmail("alice@example.com");
-        c.setSkills("Java, Spring Boot");
-        c.setExperienceYears(6);
-        c.setEducation("BSc Computer Science");
-        c.setCurrentRole("Senior Developer");
+        // Profile is now snapshotted per application, not on the candidate.
+        Application app = application(1L, "Alice", 80.0, Application.ApplicationStatus.CV_REVIEWED);
+        app.setSkills("Java, Spring Boot");
+        app.setExperienceYears(6);
+        app.setEducation("BSc Computer Science");
+        app.setCurrentRole("Senior Developer");
+        c.setApplications(java.util.List.of(app));
         when(candidateRepository.findById(1L)).thenReturn(Optional.of(c));
 
         String result = candidateTool.getCandidateDetails(1L);
@@ -161,8 +164,11 @@ class CandidateToolTest {
         JsonNode json = objectMapper.readTree(result);
         JsonNode cd = json.get("candidate");
         assertThat(cd.get("name").asText()).isEqualTo("Alice");
-        assertThat(cd.get("skills").asText()).isEqualTo("Java, Spring Boot");
-        assertThat(cd.get("experience_years").asInt()).isEqualTo(6);
+        // Candidate root is identity-only now.
+        assertThat(cd.has("skills")).isFalse();
+        JsonNode appNode = cd.get("applications").get(0);
+        assertThat(appNode.get("skills").asText()).isEqualTo("Java, Spring Boot");
+        assertThat(appNode.get("experience_years").asInt()).isEqualTo(6);
     }
 
     @Test

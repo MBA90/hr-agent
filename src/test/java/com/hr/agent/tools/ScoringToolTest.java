@@ -156,10 +156,6 @@ class ScoringToolTest {
         Candidate c = new Candidate();
         c.setId(candidateId);
         c.setFullName(candidateName);
-        c.setSkills("Java, Spring Boot");
-        c.setExperienceYears(5);
-        c.setEducation("BSc Computer Science");
-        c.setCurrentRole("Developer");
 
         JobPosting j = new JobPosting();
         j.setId(jobId);
@@ -172,7 +168,12 @@ class ScoringToolTest {
         a.setId(candidateId);
         a.setCandidate(c);
         a.setJobPosting(j);
-        a.setStatus(Application.ApplicationStatus.APPLIED);
+        // Profile is now snapshotted on the application, not the candidate.
+        a.setSkills("Java, Spring Boot");
+        a.setExperienceYears(5);
+        a.setEducation("BSc Computer Science");
+        a.setCurrentRole("Developer");
+        a.setStatus(Application.ApplicationStatus.CV_REVIEWED);
         return a;
     }
 

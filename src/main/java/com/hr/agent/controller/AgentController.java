@@ -15,6 +15,7 @@ import com.hr.agent.tools.ToolResultContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -24,7 +25,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 
 @RestController
@@ -141,8 +141,14 @@ public class AgentController {
             JobPosting job = jobPostingRepository.findById(jobId)
                     .orElseThrow(() -> new IllegalArgumentException("Job not found: " + jobId));
 
-            // Save candidate first to obtain the generated ID 
+            // Upsert candidate identity only (name/email/phone). CV-derived
+            // profile data is now snapshotted per-application, never on the candidate.
             Candidate candidate = candidateRepository.findByEmail(email)
+                    .map(existing -> {
+                        existing.setFullName(name);
+                        if (phone != null && !phone.isBlank()) existing.setPhone(phone);
+                        return existing;
+                    })
                     .orElseGet(() -> Candidate.builder()
                             .fullName(name)
                             .email(email)
@@ -151,27 +157,44 @@ public class AgentController {
 
             candidate = candidateRepository.save(candidate);
 
-            // Create application if this candidate hasn't applied for this job yet
+            // Resolve (or create) the application for this candidate+job before
+            // writing the file, so its APP_REF_NO is available for the filename.
             final Candidate savedCandidate = candidate;
-            applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(candidate.getId(), jobId)
+            Application application = applicationRepository
+                    .findByCandidateIdAndJobPostingIdWithDetails(candidate.getId(), jobId)
                     .orElseGet(() -> applicationRepository.save(Application.builder()
                             .candidate(savedCandidate)
                             .jobPosting(job)
                             .status(Application.ApplicationStatus.APPLIED)
                             .build()));
 
-            String fileName = "CND_" + candidate.getId() + ".pdf";
+            // Once an application has been reviewed it is locked: its CV/profile
+            // snapshot and status must not change. Reject the re-upload outright.
+            if (application.getStatus() != Application.ApplicationStatus.APPLIED) {
+                log.info("Rejected CV re-upload for appRefNo={} jobId={} status={}",
+                        application.getAppRefNo(), jobId, application.getStatus());
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    "Application " + application.getAppRefNo() + " is already under review (status "
+                    + application.getStatus() + "). Its CV can no longer be replaced.");
+            }
+
+            // Still APPLIED — safe to (re)attach the CV. Each upload is a new,
+            // immutable version on disk; never overwrite.
+            int newVersion = (application.getCvVersion() != null ? application.getCvVersion() : 0) + 1;
+            String fileName = application.getAppRefNo() + "_v" + newVersion + ".pdf";
             Path filePath = storageDir.resolve(fileName);
-            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(file.getInputStream(), filePath);
 
-            candidate.setCvFilePath("./cv-uploads/" + fileName);
-            candidateRepository.save(candidate);
+            application.setCvFilePath("./cv-uploads/" + fileName);
+            application.setCvVersion(newVersion);
+            applicationRepository.save(application);
 
-            log.info("CV uploaded for candidate={} cndRefNo={} jobId={}", email, candidate.getCndRefNo(), jobId);
+            log.info("CV uploaded for candidate={} appRefNo={} jobId={} version={}",
+                    email, application.getAppRefNo(), jobId, newVersion);
             return ResponseEntity.ok(
-                "CV uploaded successfully. Candidate Reference: " + candidate.getCndRefNo() +
-                " (ID: " + candidate.getId() + "). Use the chat to parse and score this candidate."
-            );
+                "CV uploaded successfully (v" + newVersion + "). Application Reference: "
+                + application.getAppRefNo() + " (Candidate: " + candidate.getCndRefNo()
+                + "). Use the chat to parse and score this application.");
 
         } catch (Exception e) {
             log.error("CV upload failed for email={}", email, e);

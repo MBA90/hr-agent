@@ -2,9 +2,7 @@ package com.hr.agent.tools;
 
 import com.hr.agent.dto.CandidateProfile;
 import com.hr.agent.entity.Application;
-import com.hr.agent.entity.Candidate;
 import com.hr.agent.repository.ApplicationRepository;
-import com.hr.agent.repository.CandidateRepository;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import lombok.RequiredArgsConstructor;
@@ -16,61 +14,66 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
-import java.util.List;
 
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CvParserTool {
 
-    private final CandidateRepository candidateRepository;
     private final ApplicationRepository applicationRepository;
     private final OllamaChatModel ollamaChatModel;
 
     @Value("${hr.agent.cv-storage-path:./cv-uploads/}")
     private String cvStoragePath;
 
-    @Tool("Parse the CV of a candidate and extract their skills, experience, education, and current role. " +
-          "Input: candidateId (Long). Returns a summary of the parsed profile.")
-    public String parseCandidateCv(Long candidateId) {
-        log.info("Parsing CV for candidateId={}", candidateId);
+    @Tool("Parse the CV of a candidate's application for a job and extract their skills, experience, " +
+          "education, and current role. The parsed profile is stored on that application only. " +
+          "Input: candidateId (Long), jobId (Long). Returns a summary of the parsed profile.")
+    public String parseCandidateCv(Long candidateId, Long jobId) {
+        log.info("Parsing CV for candidateId={} jobId={}", candidateId, jobId);
 
-        Candidate candidate = candidateRepository.findById(candidateId)
-                .orElseThrow(() -> new IllegalArgumentException("Candidate not found: " + candidateId));
+        Application application = applicationRepository
+                .findByCandidateIdAndJobPostingIdWithDetails(candidateId, jobId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No application found for candidateId=" + candidateId + " jobId=" + jobId));
 
-        if (candidate.getCvFilePath() == null || candidate.getCvFilePath().isBlank()) {
-            return "No CV file found for candidate " + candidate.getFullName() + ". Please upload a CV first.";
+        String candidateName = application.getCandidate().getFullName();
+
+        if (application.getCvFilePath() == null || application.getCvFilePath().isBlank()) {
+            return "No CV file found for application " + application.getAppRefNo()
+                    + " (" + candidateName + "). Please upload a CV first.";
         }
 
         try {
-            String rawText = extractTextFromPdf(candidate.getCvFilePath());
-            CandidateProfile profile = extractProfileWithLlm(rawText);
+            CandidateProfile profile = parseInto(application, application.getCvFilePath());
+            application.setStatus(Application.ApplicationStatus.CV_REVIEWED);
+            applicationRepository.save(application);
 
-            int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
-            candidate.setSkills(profile.getSkills());
-            candidate.setExperienceYears(experienceYears);
-            candidate.setEducation(profile.getEducation());
-            candidate.setCurrentRole(profile.getCurrentRole());
-            candidate.setNationality(profile.getNationality());
-            candidateRepository.save(candidate);
-
-            // Move all pending applications to CV_REVIEWED
-            List<Application> pending = applicationRepository.findByCandidateIdAndStatus(
-                    candidateId, Application.ApplicationStatus.APPLIED);
-            pending.forEach(a -> a.setStatus(Application.ApplicationStatus.CV_REVIEWED));
-            applicationRepository.saveAll(pending);
-
-            log.info("CV parsed successfully for candidate={}", candidate.getFullName());
+            log.info("CV parsed successfully for application={}", application.getAppRefNo());
             return String.format(
-                "CV parsed for %s: Skills=[%s], Experience=%d yrs, Education=%s, Role=%s",
-                candidate.getFullName(), profile.getSkills(),
-                experienceYears, profile.getEducation(), profile.getCurrentRole()
+                "CV parsed for %s (application %s): Skills=[%s], Experience=%d yrs, Education=%s, Role=%s",
+                candidateName, application.getAppRefNo(), profile.getSkills(),
+                application.getExperienceYears(), profile.getEducation(), profile.getCurrentRole()
             );
 
         } catch (Exception e) {
-            log.error("Failed to parse CV for candidateId={}", candidateId, e);
-            return "Failed to parse CV for candidate " + candidateId + ": " + e.getMessage();
+            log.error("Failed to parse CV for application of candidateId={} jobId={}", candidateId, jobId, e);
+            return "Failed to parse CV for application of candidate " + candidateId + ": " + e.getMessage();
         }
+    }
+
+    /** Extracts the CV at {@code cvFilePath} and writes the parsed profile onto the application snapshot. */
+    private CandidateProfile parseInto(Application application, String cvFilePath) throws Exception {
+        String rawText = extractTextFromPdf(cvFilePath);
+        CandidateProfile profile = extractProfileWithLlm(rawText);
+
+        int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
+        application.setSkills(profile.getSkills());
+        application.setExperienceYears(experienceYears);
+        application.setEducation(profile.getEducation());
+        application.setCurrentRole(profile.getCurrentRole());
+        application.setNationality(profile.getNationality());
+        return profile;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
