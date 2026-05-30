@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+        v2.0.7 — Per-application CV snapshot
+        Moves CV-derived profile data and the CV file reference off the shared
+        CANDIDATE row onto each APPLICATION, so a CV re-upload can never
+        retroactively mutate an already-reviewed application.
+        CANDIDATE becomes identity-only (name/email/phone).
+        A CV may be re-uploaded (versioned) only while the application is APPLIED;
+        once CV_REVIEWED or beyond the application is locked.
+        Author : hr-dev
+    -->
+
+    <!-- 1) Add the snapshot + CV-reference columns to APPLICATION.
+         NOTE: PENDING_CV_* were part of an earlier iteration and are dropped again
+         in changeSet (4). They are kept here unchanged so the checksum of this
+         already-applied changeset stays valid (never edit an applied changeset). -->
+    <changeSet id="v2.0.7-application-add-cv-snapshot" author="hr-dev" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="APPLICATION" columnName="CV_FILE_PATH"/></not>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE APPLICATION ADD (
+                CV_FILE_PATH         VARCHAR2(500),
+                CV_VERSION           NUMBER(4)   DEFAULT 0,
+                PENDING_CV_FILE_PATH VARCHAR2(500),
+                PENDING_CV_VERSION   NUMBER(4),
+                NATIONALITY          VARCHAR2(100),
+                SKILLS               VARCHAR2(2000),
+                EXPERIENCE_YEARS     NUMBER(3),
+                EDUCATION            VARCHAR2(500),
+                CURRENT_ROLE         VARCHAR2(200)
+            )
+        </sql>
+
+        <rollback>
+            <sql>
+                ALTER TABLE APPLICATION DROP (
+                    CV_FILE_PATH, CV_VERSION, PENDING_CV_FILE_PATH, PENDING_CV_VERSION,
+                    NATIONALITY, SKILLS, EXPERIENCE_YEARS, EDUCATION, CURRENT_ROLE
+                )
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- 2) Backfill each application from its candidate so reviewed data survives -->
+    <changeSet id="v2.0.7-application-backfill-snapshot" author="hr-dev" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="CANDIDATE" columnName="SKILLS"/>
+        </preConditions>
+
+        <sql>
+            UPDATE APPLICATION a
+               SET (CV_FILE_PATH, SKILLS, EXPERIENCE_YEARS, EDUCATION, CURRENT_ROLE, NATIONALITY) =
+                   (SELECT c.CV_FILE_PATH, c.SKILLS, c.EXPERIENCE_YEARS, c.EDUCATION, c.CURRENT_ROLE, c.NATIONALITY
+                      FROM CANDIDATE c
+                     WHERE c.ID = a.CANDIDATE_ID)
+        </sql>
+
+        <sql>
+            UPDATE APPLICATION SET CV_VERSION = 1 WHERE CV_FILE_PATH IS NOT NULL
+        </sql>
+
+        <rollback/>
+    </changeSet>
+
+    <!-- 3) Drop the now-relocated columns from CANDIDATE (identity-only) -->
+    <changeSet id="v2.0.7-candidate-drop-profile" author="hr-dev" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="CANDIDATE" columnName="SKILLS"/>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE CANDIDATE DROP (
+                CV_FILE_PATH, SKILLS, EXPERIENCE_YEARS, EDUCATION, CURRENT_ROLE, NATIONALITY
+            )
+        </sql>
+
+        <rollback>
+            <sql>
+                ALTER TABLE CANDIDATE ADD (
+                    NATIONALITY      VARCHAR2(100),
+                    CV_FILE_PATH     VARCHAR2(500),
+                    SKILLS           VARCHAR2(2000),
+                    EXPERIENCE_YEARS NUMBER(3),
+                    EDUCATION        VARCHAR2(500),
+                    CURRENT_ROLE     VARCHAR2(200)
+                )
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- 4) Drop PENDING_CV_*: the design settled on a hard lock (a CV can be
+         replaced only while the application is APPLIED; reviewed applications are
+         immutable), so no pending-CV holding area is needed. -->
+    <changeSet id="v2.0.7-application-drop-pending-cv" author="hr-dev" dbms="oracle">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="APPLICATION" columnName="PENDING_CV_FILE_PATH"/>
+        </preConditions>
+
+        <sql>
+            ALTER TABLE APPLICATION DROP (PENDING_CV_FILE_PATH, PENDING_CV_VERSION)
+        </sql>
+
+        <rollback>
+            <sql>
+                ALTER TABLE APPLICATION ADD (
+                    PENDING_CV_FILE_PATH VARCHAR2(500),
+                    PENDING_CV_VERSION   NUMBER(4)
+                )
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

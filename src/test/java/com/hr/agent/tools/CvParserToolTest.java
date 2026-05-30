@@ -2,8 +2,8 @@ package com.hr.agent.tools;
 
 import com.hr.agent.entity.Application;
 import com.hr.agent.entity.Candidate;
+import com.hr.agent.entity.JobPosting;
 import com.hr.agent.repository.ApplicationRepository;
-import com.hr.agent.repository.CandidateRepository;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -30,7 +30,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CvParserToolTest {
 
-    @Mock CandidateRepository candidateRepository;
     @Mock ApplicationRepository applicationRepository;
     @Mock OllamaChatModel ollamaChatModel;
 
@@ -40,17 +39,18 @@ class CvParserToolTest {
 
     @BeforeEach
     void setUp() {
-        cvParserTool = new CvParserTool(candidateRepository, applicationRepository, ollamaChatModel);
+        cvParserTool = new CvParserTool(applicationRepository, ollamaChatModel);
         ReflectionTestUtils.setField(cvParserTool, "cvStoragePath", tempDir.toString() + "/");
     }
 
     // ── Guard cases ───────────────────────────────────────────────────────────
 
     @Test
-    void parseCandidateCv_throwsWhenCandidateNotFound() {
-        when(candidateRepository.findById(99L)).thenReturn(Optional.empty());
+    void parseCandidateCv_throwsWhenApplicationNotFound() {
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(99L, 1L))
+                .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> cvParserTool.parseCandidateCv(99L))
+        assertThatThrownBy(() -> cvParserTool.parseCandidateCv(99L, 1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("99");
         verify(ollamaChatModel, never()).generate(anyString());
@@ -58,13 +58,12 @@ class CvParserToolTest {
 
     @Test
     void parseCandidateCv_returnsMessageWhenNoCvFileAttached() {
-        Candidate candidate = new Candidate();
-        candidate.setId(1L);
-        candidate.setFullName("Alice");
-        candidate.setCvFilePath(null);
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
+        Application app = application(1L, "Alice", 1L);
+        app.setCvFilePath(null);
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
 
-        String result = cvParserTool.parseCandidateCv(1L);
+        String result = cvParserTool.parseCandidateCv(1L, 1L);
 
         assertThat(result).contains("No CV file");
         verify(ollamaChatModel, never()).generate(anyString());
@@ -72,26 +71,24 @@ class CvParserToolTest {
 
     @Test
     void parseCandidateCv_returnsMessageWhenCvFilePathIsBlank() {
-        Candidate candidate = new Candidate();
-        candidate.setId(1L);
-        candidate.setFullName("Alice");
-        candidate.setCvFilePath("   ");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
+        Application app = application(1L, "Alice", 1L);
+        app.setCvFilePath("   ");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
 
-        String result = cvParserTool.parseCandidateCv(1L);
+        String result = cvParserTool.parseCandidateCv(1L, 1L);
 
         assertThat(result).contains("No CV file");
     }
 
     @Test
     void parseCandidateCv_returnsErrorWhenFileDoesNotExist() {
-        Candidate candidate = new Candidate();
-        candidate.setId(1L);
-        candidate.setFullName("Alice");
-        candidate.setCvFilePath("/nonexistent/path/cv.pdf");
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
+        Application app = application(1L, "Alice", 1L);
+        app.setCvFilePath("/nonexistent/path/cv.pdf");
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
 
-        String result = cvParserTool.parseCandidateCv(1L);
+        String result = cvParserTool.parseCandidateCv(1L, 1L);
 
         assertThat(result).contains("Failed to parse CV");
     }
@@ -99,19 +96,14 @@ class CvParserToolTest {
     // ── Happy path ────────────────────────────────────────────────────────────
 
     @Test
-    void parseCandidateCv_parsesAndSavesCandidateProfile() throws IOException {
-        // Create a real minimal PDF using PDFBox
+    void parseCandidateCv_parsesProfileOntoApplicationAndMarksReviewed() throws IOException {
         Path pdfPath = tempDir.resolve("alice_cv.pdf");
         createMinimalPdf(pdfPath, "Alice Johnson\nJava Developer at Acme Corp\n5 years experience\nBSc Computer Science\nJava Spring Boot Docker");
 
-        Candidate candidate = new Candidate();
-        candidate.setId(1L);
-        candidate.setFullName("Alice Johnson");
-        candidate.setEmail("alice@example.com");
-        candidate.setCvFilePath(pdfPath.toString());
-        when(candidateRepository.findById(1L)).thenReturn(Optional.of(candidate));
-        when(applicationRepository.findByCandidateIdAndStatus(1L, Application.ApplicationStatus.APPLIED))
-                .thenReturn(java.util.List.of());
+        Application app = application(1L, "Alice Johnson", 1L);
+        app.setCvFilePath(pdfPath.toString());
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(1L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn("""
                 FULL_NAME: Alice Johnson
                 CURRENT_ROLE: Java Developer at Acme Corp
@@ -121,15 +113,17 @@ class CvParserToolTest {
                 SUMMARY: Experienced Java developer with 5 years in enterprise applications.
                 """);
 
-        String result = cvParserTool.parseCandidateCv(1L);
+        String result = cvParserTool.parseCandidateCv(1L, 1L);
 
         assertThat(result).contains("Alice Johnson");
         assertThat(result).contains("Java, Spring Boot, Docker");
-        assertThat(candidate.getSkills()).isEqualTo("Java, Spring Boot, Docker");
-        assertThat(candidate.getExperienceYears()).isEqualTo(5);
-        assertThat(candidate.getCurrentRole()).isEqualTo("Java Developer at Acme Corp");
-        assertThat(candidate.getEducation()).isEqualTo("BSc Computer Science, State University");
-        verify(candidateRepository).save(candidate);
+        // Snapshot lands on the application, NOT the candidate
+        assertThat(app.getSkills()).isEqualTo("Java, Spring Boot, Docker");
+        assertThat(app.getExperienceYears()).isEqualTo(5);
+        assertThat(app.getCurrentRole()).isEqualTo("Java Developer at Acme Corp");
+        assertThat(app.getEducation()).isEqualTo("BSc Computer Science, State University");
+        assertThat(app.getStatus()).isEqualTo(Application.ApplicationStatus.CV_REVIEWED);
+        verify(applicationRepository).save(app);
     }
 
     @Test
@@ -137,24 +131,38 @@ class CvParserToolTest {
         Path pdfPath = tempDir.resolve("bob_cv.pdf");
         createMinimalPdf(pdfPath, "Bob Smith CV content");
 
-        Candidate candidate = new Candidate();
-        candidate.setId(2L);
-        candidate.setFullName("Bob Smith");
-        candidate.setCvFilePath(pdfPath.toString());
-        when(candidateRepository.findById(2L)).thenReturn(Optional.of(candidate));
-        when(applicationRepository.findByCandidateIdAndStatus(2L, Application.ApplicationStatus.APPLIED))
-                .thenReturn(java.util.List.of());
+        Application app = application(2L, "Bob Smith", 1L);
+        app.setCvFilePath(pdfPath.toString());
+        when(applicationRepository.findByCandidateIdAndJobPostingIdWithDetails(2L, 1L))
+                .thenReturn(Optional.of(app));
         when(ollamaChatModel.generate(anyString())).thenReturn("I cannot parse this CV.");
 
-        String result = cvParserTool.parseCandidateCv(2L);
+        String result = cvParserTool.parseCandidateCv(2L, 1L);
 
-        // LLM returned no structured fields — tool saves with defaults and reports success
         assertThat(result).contains("Bob Smith");
-        verify(candidateRepository).save(candidate);
-        assertThat(candidate.getExperienceYears()).isEqualTo(0); // defaulted from null
+        verify(applicationRepository).save(app);
+        assertThat(app.getExperienceYears()).isEqualTo(0); // defaulted from null
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private Application application(Long candidateId, String candidateName, Long jobId) {
+        Candidate c = new Candidate();
+        c.setId(candidateId);
+        c.setFullName(candidateName);
+
+        JobPosting j = new JobPosting();
+        j.setId(jobId);
+        j.setTitle("Java Developer");
+
+        Application a = new Application();
+        a.setId(candidateId);
+        a.setAppRefNo("APP_" + candidateId);
+        a.setCandidate(c);
+        a.setJobPosting(j);
+        a.setStatus(Application.ApplicationStatus.APPLIED);
+        return a;
+    }
 
     private void createMinimalPdf(Path path, String text) throws IOException {
         try (PDDocument doc = new PDDocument()) {
@@ -164,7 +172,6 @@ class CvParserToolTest {
                 cs.beginText();
                 cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
                 cs.newLineAtOffset(50, 700);
-                // PDFBox doesn't support newlines in showText; write line by line
                 for (String line : text.split("\n")) {
                     cs.showText(line);
                     cs.newLineAtOffset(0, -15);

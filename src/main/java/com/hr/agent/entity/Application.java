@@ -45,6 +45,30 @@ public class Application {
     @Builder.Default
     private ApplicationStatus status = ApplicationStatus.APPLIED;
 
+    // ── CV reference (active = what this application was reviewed/scored against) ──
+    @Column(name = "CV_FILE_PATH", length = 500)
+    private String cvFilePath;
+
+    @Column(name = "CV_VERSION")
+    @Builder.Default
+    private Integer cvVersion = 0;
+
+    // ── Profile snapshot (frozen at review time, immune to later re-uploads) ──
+    @Column(name = "NATIONALITY", length = 100)
+    private String nationality;
+
+    @Column(name = "SKILLS", length = 2000)
+    private String skills;
+
+    @Column(name = "EXPERIENCE_YEARS")
+    private Integer experienceYears;
+
+    @Column(name = "EDUCATION", length = 500)
+    private String education;
+
+    @Column(name = "CURRENT_ROLE", length = 200)
+    private String currentRole;
+
     @Column(name = "SCORE")
     private Double score;
 

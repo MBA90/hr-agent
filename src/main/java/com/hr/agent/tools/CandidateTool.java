@@ -138,10 +138,10 @@ public class CandidateTool {
         m.put("name", a.getCandidate().getFullName());
         m.put("email", a.getCandidate().getEmail());
         m.put("phone", a.getCandidate().getPhone());
-        m.put("nationality", a.getCandidate().getNationality());
+        m.put("nationality", a.getNationality());
         m.put("score", a.getScore());
         m.put("status", a.getStatus() != null ? a.getStatus().name() : null);
-        m.put("skills", a.getCandidate().getSkills());
+        m.put("skills", a.getSkills());
         return m;
     }
 
@@ -152,11 +152,11 @@ public class CandidateTool {
         m.put("name", a.getCandidate().getFullName());
         m.put("email", a.getCandidate().getEmail());
         m.put("phone", a.getCandidate().getPhone());
-        m.put("nationality", a.getCandidate().getNationality());
-        m.put("skills", a.getCandidate().getSkills());
-        m.put("experience_years", a.getCandidate().getExperienceYears());
-        m.put("education", a.getCandidate().getEducation());
-        m.put("current_role", a.getCandidate().getCurrentRole());
+        m.put("nationality", a.getNationality());
+        m.put("skills", a.getSkills());
+        m.put("experience_years", a.getExperienceYears());
+        m.put("education", a.getEducation());
+        m.put("current_role", a.getCurrentRole());
         m.put("job_id", a.getJobPosting().getId());
         m.put("job_title", a.getJobPosting().getTitle());
         m.put("score", a.getScore());
@@ -173,11 +173,8 @@ public class CandidateTool {
         m.put("name", c.getFullName());
         m.put("email", c.getEmail());
         m.put("phone", c.getPhone());
-        m.put("nationality", c.getNationality());
-        m.put("skills", c.getSkills());
-        m.put("experience_years", c.getExperienceYears());
-        m.put("education", c.getEducation());
-        m.put("current_role", c.getCurrentRole());
+        // Profile data is now snapshotted per application (a candidate may have
+        // a different CV/profile for each job they applied to).
         if (c.getApplications() != null && !c.getApplications().isEmpty()) {
             m.put("applications", c.getApplications().stream()
                     .map(a -> {
@@ -187,6 +184,11 @@ public class CandidateTool {
                         app.put("job_title", a.getJobPosting() != null ? a.getJobPosting().getTitle() : null);
                         app.put("status", a.getStatus() != null ? a.getStatus().name() : null);
                         app.put("score", a.getScore());
+                        app.put("nationality", a.getNationality());
+                        app.put("skills", a.getSkills());
+                        app.put("experience_years", a.getExperienceYears());
+                        app.put("education", a.getEducation());
+                        app.put("current_role", a.getCurrentRole());
                         return app;
                     })
                     .collect(java.util.stream.Collectors.toList()));
