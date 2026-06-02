@@ -20,7 +20,8 @@
 
     <properties>
         <java.version>21</java.version>
-        <langchain4j.version>0.36.2</langchain4j.version>
+        <langchain4j.version>1.15.1</langchain4j.version>
+        <langchain4j-community.version>1.15.1-beta25</langchain4j-community.version>
     </properties>
 
     <dependencies>
@@ -60,8 +61,8 @@
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
-            <artifactId>langchain4j-spring-boot-starter</artifactId>
-            <version>${langchain4j.version}</version>
+            <artifactId>langchain4j-chroma</artifactId>
+            <version>${langchain4j-community.version}</version>
         </dependency>
 
         <!-- Liquibase -->
