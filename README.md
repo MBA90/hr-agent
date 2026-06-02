@@ -1,6 +1,6 @@
 # HR Recruitment Agent
 
-An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain4j**, **Ollama (llama3.2)**, and **Oracle 19c**. The agent handles the full recruitment lifecycle — from parsing CVs and scoring candidates to scheduling interviews and sending emails — through a natural-language chat interface.
+An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain4j**, **Ollama**, **ChromaDB**, and **Oracle 19c**. The agent handles the full recruitment lifecycle — from parsing CVs and scoring candidates to scheduling interviews and sending emails — through a natural-language chat interface. Uploaded CVs are automatically embedded into a persistent vector store for semantic search and retrieval.
 
 ---
 
@@ -11,14 +11,15 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 | **JWT Authentication** | Stateless auth with signed JWTs (HS256, 24 h expiry); all agent endpoints require `Authorization: Bearer <token>` |
 | **Role-Based Access Control** | Two roles — `ROLE_ADMIN` and `ROLE_RECRUITER`; roles are embedded in the JWT and enforced per-request |
 | **Password Management** | Change password (authenticated), forgot/reset password via email token (60-min expiry) |
-| **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, and role — stored as an immutable snapshot on the application, not the candidate |
+| **CV Upload & Versioning** | CVs are stored as `APP_<id>_v<n>.pdf` (versioned, never overwritten). Re-upload is allowed only while the application is `APPLIED`; any later status locks it (`409 Conflict`) |
+| **CV Vector Ingestion (RAG)** | Every uploaded CV is asynchronously chunked (800 chars / 100 overlap), embedded with `nomic-embed-text` via Ollama, and indexed into ChromaDB. Each chunk carries `app_ref_no`, `candidate_name`, `candidate_email`, `job_id`, `job_title`, and `cv_version` metadata. Re-uploads replace previous vectors (idempotent per `app_ref_no`) |
+| **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, nationality, and current role — stored as an immutable snapshot on the application |
 | **Candidate Scoring** | LLM scores each application against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
 | **Interview Scheduling** | Books interviews against an application ID with conflict detection, stores date/time/type/interviewer |
 | **Email Notifications** | Sends interview invitations, rejection emails, offer letters, and password-reset links via Gmail SMTP |
 | **Candidate Management** | Lists jobs and candidates, filters by score threshold, updates application statuses |
 | **Job Posting Management** | Create, update, close, delete, search, and get stats on job postings via natural language |
-| **Multi-Application Support** | One candidate can apply to multiple jobs simultaneously — each application carries its own CV version, parsed profile, status, score, and timeline |
-| **CV Integrity / Re-upload Guard** | CV uploads are versioned per-application (`APP_<id>_v<n>.pdf`, never overwritten). A CV can be replaced only while the application is still `APPLIED`; once reviewed (`CV_REVIEWED` or beyond) the application is locked and further uploads are rejected (`409 Conflict`) |
+| **Multi-Application Support** | One candidate can apply to multiple jobs — each application carries its own CV version, parsed profile, status, score, and timeline |
 | **JSON API** | All tool results returned as structured JSON for easy frontend consumption |
 
 ---
@@ -28,8 +29,10 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 - **Java 21** / **Spring Boot 3.2.5**
 - **Spring Security 6** — stateless JWT filter chain, BCrypt (cost 12)
 - **JJWT 0.12** — JWT signing / validation (HS256)
-- **LangChain4j 0.36.2** — `AiServices`, `@Tool`, `OllamaChatModel`
-- **Ollama** — runs `llama3.2:latest` locally (no cloud API key needed)
+- **LangChain4j 1.15.1** — `AiServices`, `@Tool`, `OllamaChatModel`, `EmbeddingStoreIngestor`
+- **langchain4j-chroma 1.15.1-beta25** — `ChromaEmbeddingStore` (Chroma V2 API)
+- **Ollama** — runs `llama3.2:latest` (chat) and `nomic-embed-text` (embeddings) locally
+- **ChromaDB 0.5.x+** — vector store for CV embeddings (Docker)
 - **Oracle 19c** — schema managed by **Liquibase** (native Oracle SQL migrations)
 - **PDFBox 3** — PDF text extraction
 - **Spring Mail** — Gmail SMTP (interview notifications + password-reset emails)
@@ -48,11 +51,12 @@ JwtAuthFilter  ──validates token──▶  SecurityContext
       ▼
 AgentController
       │  calls HrAgentService
+      │  publishes CvUploadedEvent (on CV upload)
       ▼
 HrAgentService  (LangChain4j AiServices proxy)
       │  tool calls dispatched automatically by the LLM
       ├── CandidateTool      — job/candidate/application queries & status updates
-      ├── CvParserTool       — PDF → LLM → structured profile
+      ├── CvParserTool       — PDF → LLM → structured profile snapshot
       ├── ScoringTool        — LLM scoring of applications against job requirements
       ├── SchedulerTool      — interview booking & management
       ├── EmailTool          — SMTP notifications
@@ -62,7 +66,38 @@ HrAgentService  (LangChain4j AiServices proxy)
 AgentController  assembles ChatResponse { message, data }
 ```
 
-Tool results are captured in a **ThreadLocal** (`ToolResultContext`) before the LLM processes them, so the structured JSON payload reaches the frontend even when the LLM truncates its reply.
+### RAG Ingestion Pipeline
+
+Every CV upload triggers an asynchronous ingestion flow decoupled from the HTTP request:
+
+```
+POST /api/agent/upload-cv
+      │  file saved to ./cv-uploads/APP_<id>_v<n>.pdf
+      │  Application saved to Oracle DB
+      │
+      ▼  ApplicationEventPublisher.publishEvent(CvUploadedEvent)
+      │
+      ▼  (async — separate thread)
+CvIngestionListener (@Async @EventListener)
+      │  loads Application (with candidate + job) from DB
+      │  extracts raw text via PdfTextExtractor (PDFBox)
+      │
+      ▼
+ChromaCvVectorStore  (CvVectorStore port)
+      │  removeAll(app_ref_no == X)   ← idempotent: clears old vectors on re-upload
+      │  Document.from(rawText, metadata)
+      │    metadata: app_ref_no, candidate_name, candidate_email,
+      │              job_id, job_title, cv_version
+      ▼
+EmbeddingStoreIngestor
+      │  DocumentSplitters.recursive(800 chars, 100 overlap)
+      │  OllamaEmbeddingModel (nomic-embed-text, 768-dim)
+      ▼
+ChromaEmbeddingStore  (ChromaDB, V2 API)
+      collection: cv-store
+```
+
+A Chroma or Ollama outage during ingestion only loses the vector copy (logged as WARN) — the HTTP upload and Oracle DB record always succeed.
 
 Authentication flow:
 
@@ -132,7 +167,6 @@ AuthResponse { token, tokenType, userId, username, email, fullName, roles }
  │     updated_at          │
  └────────────┬────────────┘
               │ 1
-              │
               │ *
  ┌────────────▼────────────┐
  │  PASSWORD_RESET_TOKEN   │
@@ -145,6 +179,7 @@ AuthResponse { token, tokenType, userId, username, email, fullName, roles }
  │     created_at          │
  └─────────────────────────┘
 ```
+
 ---
 
 ## Prerequisites
@@ -154,7 +189,8 @@ AuthResponse { token, tokenType, userId, username, email, fullName, roles }
 | Java 21+ | |
 | Maven 3.9+ | |
 | Oracle 19c | Schema: `hr_agent` / password: your choice |
-| Ollama | Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
+| Ollama | Install from [ollama.com](https://ollama.com); pull both models (see below) |
+| ChromaDB | Run via Docker Compose (see below) |
 | Gmail App Password | Required for SMTP — see setup below |
 
 ---
@@ -174,18 +210,72 @@ Liquibase runs all migrations automatically on startup.
 ### 2. Ollama
 
 ```bash
+# Chat model (used by the HR agent)
 ollama pull llama3.2
-ollama serve          # starts on http://localhost:11434
+
+# Embedding model (used for CV vector ingestion)
+ollama pull nomic-embed-text
+
+ollama serve   # starts on http://localhost:11434
 ```
 
-### 3. Gmail App Password
+### 3. ChromaDB
+
+Start ChromaDB and its admin UI with Docker Compose:
+
+```yaml
+# docker-compose.yml
+services:
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: chromadb
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+
+  chromadb-ui:
+    image: thanatosdi/chromadb-admin:latest
+    container_name: chromadb-ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - chromadb
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+```
+
+```bash
+docker compose up -d
+```
+
+The `cv-store` collection is created automatically on the first CV upload — no manual setup needed.
+
+> **Admin UI:** open `http://localhost:3000` and set the ChromaDB URL to `http://chromadb:8000.
+
+Verify Chroma is up:
+
+```bash
+curl http://localhost:8000/api/v2/heartbeat
+# → {"nanosecond heartbeat": ...}
+
+curl http://localhost:8000/api/v2/tenants/default_tenant/databases/default_database/collections
+# → [] before first upload, ["cv-store"] after
+```
+
+### 4. Gmail App Password
 
 1. Enable 2-Step Verification on your Google account
 2. Go to **Google Account → Security → App Passwords**
 3. Create a password for "Mail"
 4. Use the 16-character password in `application-local.yml`
 
-### 4. Configuration
+### 5. Configuration
 
 Create `src/main/resources/application-local.yml` (git-ignored):
 
@@ -212,9 +302,21 @@ security:
     expiration: 86400000               # 24 h in milliseconds
 ```
 
-Alternatively, supply secrets via environment variables: `$JWT_SECRET`, `$DB_PASSWORD`, `$MAIL_USERNAME`, `$MAIL_PASSWORD`, `$CV_STORAGE_PATH`, `$PASSWORD_RESET_URL`.
+**Environment variables** (alternative to local yml):
 
-### 5. Run
+| Variable | Default | Description |
+|---|---|---|
+| `JWT_SECRET` | *(required)* | HS256 signing key, min 32 chars |
+| `DB_PASSWORD` | `admin` | Oracle schema password |
+| `MAIL_USERNAME` | — | Gmail address |
+| `MAIL_PASSWORD` | — | Gmail App Password |
+| `CV_STORAGE_PATH` | `./cv-uploads/` | Local directory for CV files |
+| `PASSWORD_RESET_URL` | `http://localhost:3000/reset-password` | Frontend reset link |
+| `CHROMA_URL` | `http://localhost:8000` | ChromaDB base URL |
+| `CHROMA_COLLECTION` | `cv-store` | ChromaDB collection name |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model pulled in Ollama |
+
+### 6. Run
 
 ```bash
 mvn spring-boot:run -Dspring-boot.run.profiles=local
@@ -252,8 +354,8 @@ A default admin account is seeded on first startup — username `admin`, passwor
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `POST` | `/api/agent/chat` | Yes | Send a natural-language message to the HR agent |
-| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (`file`, `jobId`, `name`, `email`, `phone`). File is stored as `APP_<id>_v<n>.pdf` (versioned, never overwritten). Allowed only while the application is `APPLIED` — returns `409 Conflict` if the application has already been reviewed. |
-| `GET`  | `/api/agent/health` | No | Health check |
+| `POST` | `/api/agent/upload-cv` | Yes | Upload a PDF CV (`file`, `jobId`, `name`, `email`, `phone`). File stored as `APP_<id>_v<n>.pdf`. Triggers async vector ingestion into ChromaDB. Returns `409 Conflict` if the application has already been reviewed. |
+| `GET`  | `/api/agent/health` | Yes (ADMIN) | Health check |
 
 The chat endpoint accepts `{ "message": "..." }`. The agent routes the message to the appropriate tool automatically. The response includes a human-readable `message` from the LLM and a structured `data` payload.
 
@@ -339,7 +441,7 @@ mvn test
 | `HrAgentApplicationTests` | 1 |
 | **Total** | **55** |
 
-Tests use Mockito for all dependencies and real PDFBox for PDF generation — no running database or Ollama instance required.
+Tests use Mockito for all dependencies and real PDFBox for PDF generation — no running database, Ollama, or ChromaDB instance required.
 
 ---
 
@@ -347,21 +449,37 @@ Tests use Mockito for all dependencies and real PDFBox for PDF generation — no
 
 ```
 src/main/java/com/hr/agent/
-├── config/          OllamaConfig.java
-├── controller/      AgentController.java, AuthController.java
+├── config/
+│   ├── OllamaConfig.java        — OllamaChatModel + HrAgentService (AiServices) beans
+│   └── RagConfig.java           — OllamaEmbeddingModel, ChromaEmbeddingStore, EmbeddingStoreIngestor beans
+├── controller/
+│   ├── AgentController.java     — chat, CV upload (publishes CvUploadedEvent), health
+│   └── AuthController.java
 ├── dto/
-│   ├── auth/        LoginRequest, RegisterRequest, AuthResponse,
-│   │                ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
-│   └── ...          ChatRequest, ChatResponse, CandidateProfile, ScoringResult
-├── entity/          Candidate, Application, JobPosting, Interview,
-│                    AppUser, Role, UserRole, UserRoleId, PasswordResetToken
-├── exception/       GlobalExceptionHandler, DuplicateResourceException, InvalidTokenException
-├── repository/      CandidateRepository, ApplicationRepository, JobPostingRepository,
-│                    InterviewRepository, AppUserRepository, RoleRepository,
-│                    PasswordResetTokenRepository
-├── security/        SecurityConfig, JwtAuthFilter, JwtUtil,
-│                    JwtAuthEntryPoint, AppUserDetailsService
-├── service/         HrAgentService.java, AuthService.java, PasswordService.java
+│   ├── auth/                    LoginRequest, RegisterRequest, AuthResponse,
+│   │                            ChangePasswordRequest, ForgotPasswordRequest, ResetPasswordRequest
+│   └── ...                      ChatRequest, ChatResponse, CandidateProfile, ScoringResult
+├── entity/                      Candidate, Application, JobPosting, Interview,
+│                                AppUser, Role, UserRole, UserRoleId, PasswordResetToken
+├── exception/                   GlobalExceptionHandler, DuplicateResourceException, InvalidTokenException
+├── rag/
+│   ├── CvVectorStore.java       — port interface (index CV text into vector store)
+│   ├── chroma/
+│   │   └── ChromaCvVectorStore.java  — Chroma adapter (idempotent index via removeAll + ingestor)
+│   ├── event/
+│   │   └── CvUploadedEvent.java — Spring application event (carries applicationId)
+│   └── listener/
+│       └── CvIngestionListener.java  — @Async @EventListener: PDF extract → chunk → embed → store
+├── repository/                  CandidateRepository, ApplicationRepository, JobPostingRepository,
+│                                InterviewRepository, AppUserRepository, RoleRepository,
+│                                PasswordResetTokenRepository
+├── security/                    SecurityConfig, JwtAuthFilter, JwtUtil,
+│                                JwtAuthEntryPoint, AppUserDetailsService
+├── service/
+│   ├── HrAgentService.java      — LangChain4j AiService interface (chat)
+│   ├── AuthService.java
+│   ├── PasswordService.java
+│   └── PdfTextExtractor.java    — shared PDF → String utility (PDFBox)
 └── tools/
     ├── CandidateTool.java
     ├── CvParserTool.java
