@@ -3,17 +3,12 @@ package com.hr.agent.tools;
 import com.hr.agent.dto.CandidateProfile;
 import com.hr.agent.entity.Application;
 import com.hr.agent.repository.ApplicationRepository;
+import com.hr.agent.service.PdfTextExtractor;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-
-import java.io.File;
 
 @Component
 @RequiredArgsConstructor
@@ -22,9 +17,7 @@ public class CvParserTool {
 
     private final ApplicationRepository applicationRepository;
     private final OllamaChatModel ollamaChatModel;
-
-    @Value("${hr.agent.cv-storage-path:./cv-uploads/}")
-    private String cvStoragePath;
+    private final PdfTextExtractor pdfTextExtractor;
 
     @Tool("Parse the CV of a candidate's application for a job and extract their skills, experience, " +
           "education, and current role. The parsed profile is stored on that application only. " +
@@ -62,9 +55,8 @@ public class CvParserTool {
         }
     }
 
-    /** Extracts the CV at {@code cvFilePath} and writes the parsed profile onto the application snapshot. */
     private CandidateProfile parseInto(Application application, String cvFilePath) throws Exception {
-        String rawText = extractTextFromPdf(cvFilePath);
+        String rawText = pdfTextExtractor.extract(cvFilePath);
         CandidateProfile profile = extractProfileWithLlm(rawText);
 
         int experienceYears = profile.getExperienceYears() != null ? profile.getExperienceYears() : 0;
@@ -77,16 +69,6 @@ public class CvParserTool {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private String extractTextFromPdf(String filePath) throws Exception {
-        File pdfFile = new File(filePath);
-        if (!pdfFile.exists()) {
-            pdfFile = new File(cvStoragePath + filePath);
-        }
-        try (PDDocument doc = Loader.loadPDF(pdfFile)) {
-            return new PDFTextStripper().getText(doc);
-        }
-    }
 
     private CandidateProfile extractProfileWithLlm(String rawText) {
         String prompt = """
@@ -103,7 +85,7 @@ public class CvParserTool {
             CV TEXT:
             """ + rawText;
 
-        String response = ollamaChatModel.generate(prompt);
+        String response = ollamaChatModel.chat(prompt);
         return parseProfileResponse(response);
     }
 

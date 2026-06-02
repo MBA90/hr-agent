@@ -11,10 +11,12 @@ import com.hr.agent.repository.ApplicationRepository;
 import com.hr.agent.repository.CandidateRepository;
 import com.hr.agent.repository.JobPostingRepository;
 import com.hr.agent.service.HrAgentService;
+import com.hr.agent.rag.event.CvUploadedEvent;
 import com.hr.agent.tools.ToolResultContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -39,6 +41,7 @@ public class AgentController {
     private final JobPostingRepository jobPostingRepository;
     private final ObjectMapper objectMapper;
     private final ToolResultContext toolResultContext;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${hr.agent.cv-storage-path:./cv-uploads/}")
     private String cvStoragePath;
@@ -189,6 +192,7 @@ public class AgentController {
             application.setCvVersion(newVersion);
             applicationRepository.save(application);
 
+            eventPublisher.publishEvent(new CvUploadedEvent(application.getId()));
             log.info("CV uploaded for candidate={} appRefNo={} jobId={} version={}",
                     email, application.getAppRefNo(), jobId, newVersion);
             return ResponseEntity.ok(

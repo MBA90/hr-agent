@@ -47,7 +47,7 @@ public class OllamaConfig {
             JobPostingTool jobPostingTool) {
 
         return AiServices.builder(HrAgentService.class)
-                .chatLanguageModel(chatModel)
+                .chatModel(chatModel)
                 .chatMemoryProvider(memoryId ->
                         MessageWindowChatMemory.builder()
                                 .id(memoryId)

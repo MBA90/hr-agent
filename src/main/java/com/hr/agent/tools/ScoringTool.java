@@ -153,7 +153,7 @@ public class ScoringTool {
             application.getCurrentRole() != null ? application.getCurrentRole() : "Not specified"
         );
 
-        String response = ollamaChatModel.generate(prompt);
+        String response = ollamaChatModel.chat(prompt);
         return parseScoringResponse(response, candidate.getId(), job.getId());
     }
 
