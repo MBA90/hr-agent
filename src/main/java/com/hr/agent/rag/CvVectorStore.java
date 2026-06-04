@@ -12,10 +12,4 @@ public interface CvVectorStore {
      * Idempotent: existing vectors for the same {@code app_ref_no} are replaced.
      */
     void index(Application application, String rawText);
-
-    /** Hybrid search (dense + BM25 re-rank with RRF) across all indexed CVs. */
-    List<CvSearchResult> search(String query, int topK);
-
-    /** Hybrid search scoped to a single application's CV chunks. */
-    List<CvSearchResult> searchForApplication(String appRefNo, String query, int topK);
 }

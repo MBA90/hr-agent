@@ -12,7 +12,7 @@ An AI-powered HR recruitment assistant built with **Spring Boot 3**, **LangChain
 | **Role-Based Access Control** | Two roles — `ROLE_ADMIN` and `ROLE_RECRUITER`; roles are embedded in the JWT and enforced per-request |
 | **Password Management** | Change password (authenticated), forgot/reset password via email token (60-min expiry) |
 | **CV Upload & Versioning** | CVs are stored as `APP_<id>_v<n>.pdf` (versioned, never overwritten). Re-upload is allowed only while the application is `APPLIED`; any later status locks it (`409 Conflict`) |
-| **CV Vector Ingestion (RAG)** | Every uploaded CV is asynchronously split into semantic section-based chunks by `CvSectionSplitter` (max 1 500 chars per section; configurable overlap only between sub-chunks of an oversized section), BM25 keywords extracted per chunk, embedded with `nomic-embed-text` via Ollama, and indexed into ChromaDB. Each chunk carries `app_ref_no`, `candidate_name`, `candidate_email`, `job_id`, `job_title`, `cv_version`, `section_type`, `chunk_index`, and `keywords` metadata. Re-uploads replace previous vectors (idempotent per `app_ref_no`). Retrieval uses hybrid dense + BM25 re-rank fused via Reciprocal Rank Fusion (RRF) |
+| **CV Vector Ingestion (RAG)** | Every uploaded CV is asynchronously split into semantic section-based chunks by `CvSectionSplitter` (max 1 500 chars per section; configurable overlap only between sub-chunks of an oversized section), BM25 keywords extracted per chunk, embedded with `nomic-embed-text` via Ollama, and indexed into ChromaDB. Each chunk carries `app_ref_no`, `candidate_name`, `candidate_email`, `job_id`, `job_title`, `cv_version`, `section_type`, `chunk_index`, and `keywords` metadata. Re-uploads replace previous vectors (idempotent per `app_ref_no`). |
 | **CV Parsing** | Extracts text from PDF CVs using PDFBox, then uses the LLM to parse skills, experience, education, nationality, and current role — stored as an immutable snapshot on the application |
 | **Candidate Scoring** | LLM scores each application against job requirements (0–100) and recommends SHORTLIST / CONSIDER / REJECT |
 | **Interview Scheduling** | Books interviews against an application ID with conflict detection, stores date/time/type/interviewer |
@@ -103,9 +103,6 @@ ChromaEmbeddingStore  (ChromaDB, V2 API)
       │            job_id, job_title, cv_version,
       │            section_type, chunk_index, section_chunk_index, keywords
       collection: cv-store
-
-Retrieval (CvVectorStore.search / searchForApplication):
-      dense top-3K  →  BM25 re-rank  →  Reciprocal Rank Fusion (RRF k=60)  →  top-K results
 ```
 
 A Chroma or Ollama outage during ingestion only loses the vector copy (logged as WARN) — the HTTP upload and Oracle DB record always succeed.
@@ -474,7 +471,7 @@ src/main/java/com/hr/agent/
 │                                AppUser, Role, UserRole, UserRoleId, PasswordResetToken
 ├── exception/                   GlobalExceptionHandler, DuplicateResourceException, InvalidTokenException
 ├── rag/
-│   ├── CvVectorStore.java       — port interface (index / search CV embeddings)
+│   ├── CvVectorStore.java       — port interface (index CV embeddings into vector store)
 │   ├── CvChunk.java             — value object: section, content, indexes, BM25 keywords
 │   ├── CvSection.java           — enum of CV sections (EXPERIENCE, SKILLS, EDUCATION, …)
 │   ├── CvSearchResult.java      — retrieval result (appRefNo, candidateName, section, score)
@@ -484,8 +481,8 @@ src/main/java/com/hr/agent/
 │   │   └── CvSectionSplitter.java — section detection, inline-header normalization,
 │   │                                oversized-section sub-splitting (no trailing overlap chunk)
 │   ├── chroma/
-│   │   └── ChromaCvVectorStore.java  — Chroma adapter: section-based indexing + hybrid
-│   │                                   dense/BM25 RRF search
+│   │   └── ChromaCvVectorStore.java  — Chroma adapter: section-based indexing with dense
+│   │                                   embeddings + BM25 keyword metadata per chunk
 │   ├── event/
 │   │   └── CvUploadedEvent.java — Spring application event (carries applicationId)
 │   └── listener/
