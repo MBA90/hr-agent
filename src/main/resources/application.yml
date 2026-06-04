@@ -71,8 +71,9 @@ rag:
   embedding:
     model: nomic-embed-text
   ingestor:
-    chunk-size: 800
-    chunk-overlap: 100
+    max-section-chars: 1500    # max chars per section chunk before sub-splitting
+    subsection-overlap: 150    # overlap between sub-chunks of an oversized section
+    keywords-per-chunk: 15     # top BM25 keywords stored per chunk for sparse path
 
 logging:
   level:
