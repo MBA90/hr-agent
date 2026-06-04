@@ -38,12 +38,13 @@ public class CvSectionSplitter {
     private int keywordsPerChunk;
 
     /**
-     * Matches an ALL-CAPS phrase (letters, spaces, &, /) that immediately follows a
-     * sentence-ending character. Used to split headers that PDFBox did not put on
-     * their own line (e.g. "...environments. CORE SKILLS & TECHNOLOGIES Hands On:").
+     * Matches an ALL-CAPS phrase (letters, spaces, &, /) embedded in a line after
+     * any non-whitespace character. Used to split headers that PDFBox collapsed onto
+     * the same line as the preceding content (e.g. "(3.1 GPA) KEY ACHIEVEMENTS Led…").
+     * Only phrases that match a known section header (via detectHeader) are actually split.
      */
     private static final Pattern INLINE_CAPS_PHRASE = Pattern.compile(
-            "(?<=[.!?])\\s+([A-Z][A-Z &/\\-]{1,50}[A-Z])(?=\\s+\\S)");
+            "(?<=\\S)\\s+([A-Z][A-Z &/\\-]{1,50}[A-Z])(?=\\s+\\S)");
 
     private static final List<Map.Entry<Pattern, CvSection>> SECTION_PATTERNS = buildSectionPatterns();
 
@@ -184,6 +185,9 @@ public class CvSectionSplitter {
             Map.entry(
                 Pattern.compile("(?i)(experience|work experience|employment( history)?|work history|professional experience|career history|work record)"),
                 CvSection.EXPERIENCE),
+            Map.entry(
+                Pattern.compile("(?i)(key achievements?|achievements?|key accomplishments?|accomplishments?|notable contributions?|highlights?)"),
+                CvSection.ACHIEVEMENTS),
             Map.entry(
                 Pattern.compile("(?i)(education(al background)?|academic( background)?|qualifications?|degrees?|academic history)"),
                 CvSection.EDUCATION),

@@ -4,6 +4,7 @@ public enum CvSection {
     CONTACT,
     SUMMARY,
     EXPERIENCE,
+    ACHIEVEMENTS,
     EDUCATION,
     SKILLS,
     CERTIFICATIONS,

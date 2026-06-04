@@ -473,7 +473,7 @@ src/main/java/com/hr/agent/
 ├── rag/
 │   ├── CvVectorStore.java       — port interface (index CV embeddings into vector store)
 │   ├── CvChunk.java             — value object: section, content, indexes, BM25 keywords
-│   ├── CvSection.java           — enum of CV sections (EXPERIENCE, SKILLS, EDUCATION, …)
+│   ├── CvSection.java           — enum of CV sections (EXPERIENCE, ACHIEVEMENTS, SKILLS, EDUCATION, …)
 │   ├── CvSearchResult.java      — retrieval result (appRefNo, candidateName, section, score)
 │   ├── bm25/
 │   │   └── BM25Scorer.java      — tokenizer + BM25 scoring + top-N keyword extraction
